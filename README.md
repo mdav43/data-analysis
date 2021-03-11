@@ -3,7 +3,7 @@ Links and resources
 
 
 # R Packages/resources
-## Graphing
+## Graphing /Adhoc Analysis
 
 * https://github.com/dreamRs/esquisse
 
