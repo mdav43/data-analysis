@@ -101,7 +101,8 @@
 
 <div class="connect-data">
 	<!-- Drop zone -->
-	<label
+	<!-- svelte-ignore a11y-interactive-supports-focus -->
+	<div
 		class="drop-zone"
 		class:drag-over={dragOver}
 		on:drop={onDrop}
@@ -109,10 +110,11 @@
 		on:dragleave={onDragLeave}
 		role="button"
 		tabindex="0"
-		on:keydown={(e) => e.key === 'Enter' && e.currentTarget.click()}
-		aria-label="Upload CSV file"
+		on:click={() => fileInput.click()}
+		on:keydown={(e) => e.key === 'Enter' && fileInput.click()}
+		aria-label="Upload CSV file — drag and drop or click to browse"
 	>
-		<input type="file" accept=".csv" on:change={onInputChange} class="file-input" />
+		<input bind:this={fileInput} type="file" accept=".csv" on:change={onInputChange} class="file-input" />
 		<span class="drop-icon">📂</span>
 		<span class="drop-text">
 			{#if status === 'loading'}
@@ -121,7 +123,7 @@
 				Drag &amp; drop a CSV file, or <strong>click to browse</strong>
 			{/if}
 		</span>
-	</label>
+	</div>
 
 	<!-- Error -->
 	{#if status === 'error'}
