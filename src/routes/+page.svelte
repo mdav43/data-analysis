@@ -1,173 +1,892 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initDuckDB, query, registerFileBuffer, isDuckDBReady } from '$lib/duck/index.js';
-	import EChart from '$lib/charts/EChart.svelte';
+	import { initDuckDB, query, registerFileBuffer } from '$lib/duck/index.js';
+	import { buildCreateViewSQL } from '$lib/query/model';
+	import { buildTotalsSQL } from '$lib/query/totals';
+	import { buildTimeseriesSQL } from '$lib/query/timeseries';
+	import { buildLeaderboardSQL } from '$lib/query/leaderboard';
+	import { buildComparisonRange, calculateDelta } from '$lib/query/comparison';
+	import { resolveTimeRange } from '$lib/query/timerange';
+	import { wizardStep, sources, models, dashboards, addSource, setModel, setDashboard, loadPersistedConfig } from '$lib/state/wizard';
+	import { activeRange, activeGrain, activeFilters, comparisonEnabled } from '$lib/state/dashboard';
+
 	import ConnectData from '$lib/wizards/ConnectData.svelte';
-	import type { EChartsOption } from 'echarts';
+	import ModelWizard from '$lib/wizards/ModelWizard.svelte';
+	import MetricsWizard from '$lib/wizards/MetricsWizard.svelte';
+	import DashboardWizard from '$lib/wizards/DashboardWizard.svelte';
+	import YAMLEditor from '$lib/wizards/YAMLEditor.svelte';
+	import MetricCard from '$lib/components/MetricCard.svelte';
+	import TimeseriesChart from '$lib/components/TimeseriesChart.svelte';
+	import Leaderboard from '$lib/components/Leaderboard.svelte';
+	import FilterChips from '$lib/components/FilterChips.svelte';
+
+	import type { DashboardConfig, TimeseriesRow, LeaderboardRow, DimensionFilter, TimeGrain, TimeRangePreset } from '$lib/types';
+
+	// ── Boot ─────────────────────────────────────────────────────────────────────
 
 	let bootStatus: 'idle' | 'booting' | 'ready' | 'error' = 'idle';
 	let bootError = '';
-	let orderCount = 0;
-	let chartOption: EChartsOption | null = null;
+	let yamlOpen = false;
 
 	onMount(async () => {
 		bootStatus = 'booting';
 		try {
 			await initDuckDB();
-
-			// Fetch and register the bundled sample CSV
-			const response = await fetch('/sample_orders.csv');
-			const arrayBuffer = await response.arrayBuffer();
-			await registerFileBuffer('sample_orders.csv', new Uint8Array(arrayBuffer));
-
-			// Create table from the registered CSV
-			await query(
-				`CREATE TABLE IF NOT EXISTS sample_orders AS SELECT * FROM read_csv_auto('sample_orders.csv')`
-			);
-
-			// Run the tracer-bullet query
-			const rows = await query<{ cnt: number | bigint }>('SELECT count(*) as cnt FROM sample_orders');
-			orderCount = Number(rows[0]?.cnt ?? 0);
-
-			chartOption = {
-				title: { text: 'Sample Orders', left: 'center' },
-				tooltip: {},
-				xAxis: { type: 'category', data: ['sample_orders'] },
-				yAxis: { type: 'value', name: 'Row Count' },
-				series: [
-					{
-						type: 'bar',
-						data: [orderCount],
-						itemStyle: { color: '#4f8ef7' },
-						label: { show: true, position: 'top' }
-					}
-				]
-			};
-
+			loadPersistedConfig();
+			// If persisted config has a model, recreate the view
+			const model = $models[0];
+			if (model) {
+				await query(buildCreateViewSQL(model.name, model.sql)).catch(() => {});
+			}
 			bootStatus = 'ready';
 		} catch (e) {
 			bootError = String(e);
 			bootStatus = 'error';
-			console.error('DuckDB boot error:', e);
 		}
 	});
-</script>
 
-<main class="app">
-	<header>
-		<h1>DuckLens</h1>
-	</header>
+	// ── Sample data shortcut ─────────────────────────────────────────────────────
 
-	{#if bootStatus === 'idle' || bootStatus === 'booting'}
-		<div class="boot-indicator" role="status" aria-live="polite">
-			<div class="spinner"></div>
-			<p>Initializing DuckDB WASM…</p>
-		</div>
-	{:else if bootStatus === 'error'}
-		<div class="error-box">
-			<strong>DuckDB failed to initialize</strong>
-			<pre>{bootError}</pre>
-		</div>
-	{:else if bootStatus === 'ready'}
-		<section class="chart-section">
-			<h2>Row count: <span class="count">{orderCount.toLocaleString()}</span></h2>
-			<div class="chart-container">
-				{#if chartOption}
-					<EChart option={chartOption} />
-				{/if}
-			</div>
-		</section>
-	{/if}
+	let sampleLoading = false;
+	let sampleError = '';
 
-	<section class="connect-section">
-		<h2>Connect Data</h2>
-		<ConnectData />
-	</section>
-</main>
+	async function loadSampleData() {
+		sampleLoading = true;
+		sampleError = '';
+		try {
+			const [ordersRes, customersRes] = await Promise.all([
+				fetch('/sample_orders.csv'),
+				fetch('/sample_customers.csv')
+			]);
+			const [ordersBuffer, customersBuffer] = await Promise.all([
+				ordersRes.arrayBuffer(),
+				customersRes.arrayBuffer()
+			]);
+			await registerFileBuffer('sample_orders.csv', new Uint8Array(ordersBuffer));
+			await registerFileBuffer('sample_customers.csv', new Uint8Array(customersBuffer));
+			await query(`CREATE OR REPLACE TABLE sample_orders AS SELECT * FROM read_csv_auto('sample_orders.csv')`);
+			await query(`CREATE OR REPLACE TABLE sample_customers AS SELECT * FROM read_csv_auto('sample_customers.csv')`);
 
-<style>
-	.app {
-		font-family: system-ui, -apple-system, sans-serif;
-		max-width: 960px;
-		margin: 0 auto;
-		padding: 1.5rem;
+			const modelSQL = `SELECT o.order_id, o.customer_id, o.product_id, o.ordered_at, o.amount, c.name, c.country, c.segment\nFROM sample_orders o\nLEFT JOIN sample_customers c ON o.customer_id = c.customer_id`;
+			await query(`CREATE OR REPLACE VIEW orders_enriched AS\n${modelSQL}`);
+
+			addSource({ kind: 'source', name: 'sample_orders', type: 'csv', file: 'sample_orders.csv' });
+			addSource({ kind: 'source', name: 'sample_customers', type: 'csv', file: 'sample_customers.csv' });
+			setModel({ kind: 'model', name: 'orders_enriched', sql: modelSQL, materialize: 'view' });
+			setDashboard({
+				kind: 'dashboard',
+				name: 'Sales Dashboard',
+				model: 'orders_enriched',
+				timeseries: 'ordered_at',
+				default_time_range: 'P365D',
+				default_grain: 'month',
+				comparison: { enabled: false, mode: 'previous_period' },
+				dimensions: [
+					{ name: 'country', column: 'country' },
+					{ name: 'segment', column: 'segment' }
+				],
+				measures: [
+					{ name: 'total_revenue', label: 'Total Revenue', expr: 'SUM(amount)', format: 'usd' },
+					{ name: 'order_count', label: 'Orders', expr: 'COUNT(*)', format: 'number' }
+				],
+				layout: {
+					metric_cards: ['total_revenue', 'order_count'],
+					timeseries_measure: 'total_revenue',
+					leaderboard_dimensions: ['country', 'segment']
+				}
+			});
+			activeRange.set(resolveTimeRange('P365D'));
+			activeGrain.set('month');
+			wizardStep.set('done');
+		} catch (e) {
+			sampleError = String(e);
+		} finally {
+			sampleLoading = false;
+		}
 	}
 
-	header h1 {
-		font-size: 2rem;
-		margin-bottom: 1rem;
+	// ── Dashboard query state ────────────────────────────────────────────────────
+
+	interface MetricResult {
+		value: number;
+		delta: number | null;
+		deltaPct: number | null;
+		loading: boolean;
+		error: string | null;
+	}
+
+	let metricResults: Record<string, MetricResult> = {};
+	let chartRows: TimeseriesRow[] = [];
+	let chartCompRows: TimeseriesRow[] = [];
+	let chartLoading = false;
+	let chartError: string | null = null;
+	let leaderboardResults: Record<string, { rows: LeaderboardRow[]; loading: boolean; error: string | null }> = {};
+
+	let querySeq = 0;
+
+	$: if (bootStatus === 'ready' && $wizardStep === 'done') {
+		const d = $dashboards[0];
+		if (d) runDashboard(d, $activeRange, $activeGrain, $activeFilters, $comparisonEnabled);
+	}
+
+	async function runDashboard(
+		d: DashboardConfig,
+		range: { start: Date; end: Date },
+		grain: TimeGrain,
+		filters: DimensionFilter[],
+		comparison: boolean
+	) {
+		const seq = ++querySeq;
+		const compRange = comparison ? buildComparisonRange(range) : null;
+
+		// Metric cards
+		for (const metricName of d.layout.metric_cards) {
+			const measure = d.measures.find((m) => m.name === metricName);
+			if (!measure || seq !== querySeq) continue;
+			metricResults = {
+				...metricResults,
+				[metricName]: { value: 0, delta: null, deltaPct: null, loading: true, error: null }
+			};
+			try {
+				const sql = buildTotalsSQL({ measure, model: d.model, range, filters, timeseries: d.timeseries });
+				const rows = await query<{ value: number }>(sql);
+				if (seq !== querySeq) return;
+				const curr = Number(rows[0]?.value ?? 0);
+				let delta: number | null = null;
+				let deltaPct: number | null = null;
+				if (compRange) {
+					const compSQL = buildTotalsSQL({ measure, model: d.model, range: compRange, filters, timeseries: d.timeseries });
+					const compRows = await query<{ value: number }>(compSQL);
+					if (seq !== querySeq) return;
+					const prev = Number(compRows[0]?.value ?? 0);
+					const dr = calculateDelta(curr, prev);
+					delta = dr.absolute;
+					deltaPct = dr.pct;
+				}
+				metricResults = {
+					...metricResults,
+					[metricName]: { value: curr, delta, deltaPct, loading: false, error: null }
+				};
+			} catch (e) {
+				if (seq !== querySeq) return;
+				metricResults = {
+					...metricResults,
+					[metricName]: { value: 0, delta: null, deltaPct: null, loading: false, error: String(e) }
+				};
+			}
+		}
+
+		// Timeseries
+		if (seq !== querySeq) return;
+		const tsMeasure = d.measures.find((m) => m.name === d.layout.timeseries_measure);
+		if (tsMeasure) {
+			chartLoading = true;
+			chartError = null;
+			try {
+				const sql = buildTimeseriesSQL({ measure: tsMeasure, model: d.model, grain, range, timeseries: d.timeseries, filters });
+				const rows = await query<TimeseriesRow>(sql);
+				if (seq !== querySeq) return;
+				let compRows: TimeseriesRow[] = [];
+				if (compRange) {
+					const compSQL = buildTimeseriesSQL({ measure: tsMeasure, model: d.model, grain, range: compRange, timeseries: d.timeseries, filters });
+					compRows = await query<TimeseriesRow>(compSQL);
+				}
+				if (seq !== querySeq) return;
+				chartRows = rows;
+				chartCompRows = compRows;
+				chartLoading = false;
+			} catch (e) {
+				if (seq !== querySeq) return;
+				chartRows = [];
+				chartCompRows = [];
+				chartLoading = false;
+				chartError = String(e);
+			}
+		}
+
+		// Leaderboards
+		const activeMeasure = d.measures[0];
+		for (const dimName of d.layout.leaderboard_dimensions) {
+			const dim = d.dimensions.find((dx) => dx.name === dimName);
+			if (!dim || !activeMeasure || seq !== querySeq) continue;
+			leaderboardResults = {
+				...leaderboardResults,
+				[dimName]: { rows: [], loading: true, error: null }
+			};
+			try {
+				const sql = buildLeaderboardSQL({
+					measure: activeMeasure,
+					model: d.model,
+					dimension: dim.column,
+					range,
+					timeseries: d.timeseries,
+					filters,
+					topN: 10
+				});
+				const rawRows = await query<Record<string, unknown>>(sql);
+				if (seq !== querySeq) return;
+				let lbRows: LeaderboardRow[] = rawRows.map((r) => ({
+					dimension_value: String(r[dim.column] ?? ''),
+					value: Number(r['value'] ?? 0)
+				}));
+				if (compRange) {
+					const compSQL = buildLeaderboardSQL({
+						measure: activeMeasure,
+						model: d.model,
+						dimension: dim.column,
+						range: compRange,
+						timeseries: d.timeseries,
+						filters,
+						topN: 10
+					});
+					const compRaw = await query<Record<string, unknown>>(compSQL);
+					if (seq !== querySeq) return;
+					const compMap = new Map(compRaw.map((r) => [String(r[dim.column] ?? ''), Number(r['value'] ?? 0)]));
+					lbRows = lbRows.map((row) => {
+						const prev = compMap.get(row.dimension_value);
+						if (prev != null) {
+							const dr = calculateDelta(row.value, prev);
+							return { ...row, delta: dr.absolute, delta_pct: dr.pct ?? undefined };
+						}
+						return row;
+					});
+				}
+				leaderboardResults = { ...leaderboardResults, [dimName]: { rows: lbRows, loading: false, error: null } };
+			} catch (e) {
+				if (seq !== querySeq) return;
+				leaderboardResults = { ...leaderboardResults, [dimName]: { rows: [], loading: false, error: String(e) } };
+			}
+		}
+	}
+
+	// ── Filter management ────────────────────────────────────────────────────────
+
+	function addFilter(dimension: string, value: string) {
+		activeFilters.update((f) =>
+			f.some((x) => x.dimension === dimension && x.value === value)
+				? f
+				: [...f, { dimension, value }]
+		);
+	}
+
+	function removeFilter(f: DimensionFilter) {
+		activeFilters.update((fs) =>
+			fs.filter((x) => !(x.dimension === f.dimension && x.value === f.value))
+		);
+	}
+
+	// ── Time range UI ────────────────────────────────────────────────────────────
+
+	const PRESETS: { label: string; value: TimeRangePreset }[] = [
+		{ label: 'Last 7 days', value: 'P7D' },
+		{ label: 'Last 30 days', value: 'P30D' },
+		{ label: 'Last 90 days', value: 'P90D' },
+		{ label: 'Last 365 days', value: 'P365D' }
+	];
+
+	let rangePreset: TimeRangePreset = 'P365D';
+
+	function handleRangeChange(preset: string) {
+		rangePreset = preset as TimeRangePreset;
+		activeRange.set(resolveTimeRange(preset as TimeRangePreset));
+	}
+
+	// ── Connect handler ──────────────────────────────────────────────────────────
+
+	function handleConnect(e: CustomEvent<import('$lib/types').SourceConfig>) {
+		addSource(e.detail);
+	}
+
+	// ── Wizard step helpers ──────────────────────────────────────────────────────
+
+	const STEP_LABELS: Record<string, string> = {
+		connect: 'Connect',
+		model: 'Model',
+		metrics: 'Metrics',
+		dashboard: 'Dashboard'
+	};
+	const STEP_ORDER = ['connect', 'model', 'metrics', 'dashboard'];
+
+	function stepDone(step: string): boolean {
+		const idx = STEP_ORDER.indexOf(step);
+		const cur = STEP_ORDER.indexOf($wizardStep);
+		return cur > idx;
+	}
+
+	$: dashboard = $dashboards[0];
+</script>
+
+<!-- ── Boot screen ─────────────────────────────────────────────────────────── -->
+{#if bootStatus === 'idle' || bootStatus === 'booting'}
+	<div class="boot-screen">
+		<div class="spinner-lg"></div>
+		<p>Initializing DuckDB WASM…</p>
+	</div>
+{:else if bootStatus === 'error'}
+	<div class="boot-screen error">
+		<h2>Failed to initialize</h2>
+		<pre>{bootError}</pre>
+	</div>
+
+<!-- ── Wizard ─────────────────────────────────────────────────────────────── -->
+{:else if $wizardStep !== 'done'}
+	<div class="app">
+		<header class="app-header">
+			<span class="logo">DuckLens</span>
+			<button class="btn-ghost" on:click={() => (yamlOpen = !yamlOpen)}>
+				{yamlOpen ? 'Hide YAML' : 'Show YAML'}
+			</button>
+		</header>
+
+		<div class="wizard-body">
+			<!-- Step progress -->
+			<nav class="step-nav" aria-label="Wizard steps">
+				{#each STEP_ORDER as step}
+					<div
+						class="step-item"
+						class:active={$wizardStep === step}
+						class:done={stepDone(step)}
+					>
+						<span class="step-dot"></span>
+						<span class="step-label">{STEP_LABELS[step]}</span>
+					</div>
+				{/each}
+			</nav>
+
+			<!-- Active wizard panel -->
+			<div class="wizard-panel">
+				{#if $wizardStep === 'connect'}
+					<div class="wizard-step">
+						<h2>1. Connect Data</h2>
+						<p class="subtitle">Upload your data or try the built-in sample dataset.</p>
+
+						<div class="sample-box">
+							<p>Zero-setup demo with sample orders + customers data:</p>
+							<button class="btn-sample" on:click={loadSampleData} disabled={sampleLoading}>
+								{sampleLoading ? 'Loading…' : '⚡ Load sample data'}
+							</button>
+							{#if sampleError}
+								<div class="error-inline">{sampleError}</div>
+							{/if}
+						</div>
+
+						<div class="divider">— or upload your own CSV —</div>
+
+						<ConnectData on:connect={handleConnect} />
+
+						{#if $sources.length > 0}
+							<div class="connected-list">
+								{#each $sources as s}
+									<div class="connected-item">✓ {s.name}</div>
+								{/each}
+							</div>
+							<div class="wizard-actions">
+								<button class="btn-primary" on:click={() => wizardStep.set('model')}>
+									Next →
+								</button>
+							</div>
+						{/if}
+					</div>
+				{:else if $wizardStep === 'model'}
+					<ModelWizard />
+				{:else if $wizardStep === 'metrics'}
+					<MetricsWizard />
+				{:else if $wizardStep === 'dashboard'}
+					<DashboardWizard />
+				{/if}
+			</div>
+
+			<!-- YAML sidebar -->
+			{#if yamlOpen}
+				<div class="yaml-sidebar">
+					<YAMLEditor />
+				</div>
+			{/if}
+		</div>
+	</div>
+
+<!-- ── Dashboard ──────────────────────────────────────────────────────────── -->
+{:else if dashboard}
+	<div class="app">
+		<header class="app-header dashboard-header">
+			<span class="logo">{dashboard.name}</span>
+			<div class="header-controls">
+				<!-- Time range -->
+				<select
+					value={rangePreset}
+					on:change={(e) => handleRangeChange(e.currentTarget.value)}
+					aria-label="Time range"
+				>
+					{#each PRESETS as p}
+						<option value={p.value}>{p.label}</option>
+					{/each}
+				</select>
+
+				<!-- Grain -->
+				<select bind:value={$activeGrain} aria-label="Grain">
+					<option value="hour">Hour</option>
+					<option value="day">Day</option>
+					<option value="week">Week</option>
+					<option value="month">Month</option>
+					<option value="quarter">Quarter</option>
+					<option value="year">Year</option>
+				</select>
+
+				<!-- Comparison toggle -->
+				<label class="comparison-toggle">
+					<input type="checkbox" bind:checked={$comparisonEnabled} />
+					Compare
+				</label>
+
+				<!-- YAML toggle -->
+				<button class="btn-ghost" on:click={() => (yamlOpen = !yamlOpen)}>
+					{yamlOpen ? 'Hide YAML' : 'YAML'}
+				</button>
+
+				<!-- Back to wizard -->
+				<button class="btn-ghost" on:click={() => wizardStep.set('connect')}>
+					Edit config
+				</button>
+			</div>
+		</header>
+
+		<!-- YAML editor overlay -->
+		{#if yamlOpen}
+			<div class="yaml-overlay">
+				<YAMLEditor />
+			</div>
+		{/if}
+
+		<main class="dashboard-body">
+			<!-- Filter chips -->
+			{#if $activeFilters.length > 0}
+				<div class="filter-bar">
+					<FilterChips
+						filters={$activeFilters}
+						on:remove={(e) => removeFilter(e.detail)}
+						on:clear={() => activeFilters.set([])}
+					/>
+				</div>
+			{/if}
+
+			<!-- Metric cards -->
+			{#if dashboard.layout.metric_cards.length > 0}
+				<div class="metric-cards">
+					{#each dashboard.layout.metric_cards as metricName}
+						{@const measure = dashboard.measures.find((m) => m.name === metricName)}
+						{@const result = metricResults[metricName]}
+						<MetricCard
+							label={measure?.label ?? metricName}
+							value={result?.value ?? null}
+							format={measure?.format ?? 'number'}
+							delta={$comparisonEnabled ? (result?.delta ?? null) : null}
+							deltaPct={$comparisonEnabled ? (result?.deltaPct ?? null) : null}
+							loading={result?.loading ?? true}
+							error={result?.error ?? null}
+						/>
+					{/each}
+				</div>
+			{/if}
+
+			<!-- Timeseries chart -->
+			<div class="chart-container">
+				<TimeseriesChart
+					rows={chartRows}
+					comparisonRows={$comparisonEnabled ? chartCompRows : []}
+					label={dashboard.measures.find((m) => m.name === dashboard.layout.timeseries_measure)?.label ?? ''}
+					loading={chartLoading}
+					error={chartError}
+				/>
+			</div>
+
+			<!-- Leaderboards -->
+			{#if dashboard.layout.leaderboard_dimensions.length > 0}
+				<div class="leaderboards">
+					{#each dashboard.layout.leaderboard_dimensions as dimName}
+						{@const dim = dashboard.dimensions.find((d) => d.name === dimName)}
+						{@const measure = dashboard.measures[0]}
+						<Leaderboard
+							title={dimName}
+							dimension={dim?.column ?? dimName}
+							rows={leaderboardResults[dimName]?.rows ?? []}
+							format={measure?.format ?? 'number'}
+							comparisonEnabled={$comparisonEnabled}
+							loading={leaderboardResults[dimName]?.loading ?? true}
+							error={leaderboardResults[dimName]?.error ?? null}
+							on:filter={(e) => addFilter(e.detail.dimension, e.detail.value)}
+						/>
+					{/each}
+				</div>
+			{/if}
+		</main>
+	</div>
+{/if}
+
+<style>
+	/* ── Global reset ──────────────────────────────────────────────────────── */
+	:global(*, *::before, *::after) {
+		box-sizing: border-box;
+	}
+
+	:global(body) {
+		margin: 0;
+		font-family: system-ui, -apple-system, sans-serif;
+		background: #f5f7fc;
 		color: #1a1a2e;
 	}
 
-	.boot-indicator {
+	/* ── App shell ─────────────────────────────────────────────────────────── */
+	.app {
+		min-height: 100vh;
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 1.5rem;
-		background: #f0f4ff;
-		border-radius: 8px;
-		color: #4f5b7a;
+		flex-direction: column;
 	}
 
-	.spinner {
-		width: 24px;
-		height: 24px;
-		border: 3px solid #c0caff;
+	.app-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1.5rem;
+		background: white;
+		border-bottom: 1px solid #e8eaf0;
+		flex-shrink: 0;
+		gap: 1rem;
+	}
+
+	.logo {
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: #1a1a2e;
+		letter-spacing: -0.02em;
+	}
+
+	/* ── Boot screen ───────────────────────────────────────────────────────── */
+	.boot-screen {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		min-height: 100vh;
+		gap: 1rem;
+		color: #666;
+	}
+
+	.boot-screen.error {
+		color: #dc2626;
+	}
+
+	.boot-screen pre {
+		font-size: 0.8rem;
+		background: #fff0f0;
+		padding: 1rem;
+		border-radius: 6px;
+		max-width: 600px;
+		overflow: auto;
+	}
+
+	.spinner-lg {
+		width: 40px;
+		height: 40px;
+		border: 4px solid #c0caff;
 		border-top-color: #4f8ef7;
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
-		flex-shrink: 0;
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
-	.error-box {
-		padding: 1rem;
-		background: #fff0f0;
-		border: 1px solid #ffaaaa;
-		border-radius: 6px;
-		color: #c0392b;
-	}
-
-	.error-box pre {
-		margin: 0.5rem 0 0;
-		font-size: 0.8rem;
-		white-space: pre-wrap;
-		word-break: break-all;
-	}
-
-	.chart-section {
-		margin-bottom: 2rem;
-	}
-
-	.chart-section h2 {
-		font-size: 1.1rem;
-		color: #555;
-		margin-bottom: 0.5rem;
-	}
-
-	.count {
-		font-weight: 700;
-		color: #4f8ef7;
-	}
-
-	.chart-container {
-		width: 100%;
-		height: 320px;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
+	/* ── Wizard ────────────────────────────────────────────────────────────── */
+	.wizard-body {
+		display: flex;
+		flex: 1;
+		gap: 0;
 		overflow: hidden;
 	}
 
-	.connect-section {
-		margin-top: 2rem;
+	.step-nav {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		padding: 1.5rem 1rem;
+		background: white;
+		border-right: 1px solid #e8eaf0;
+		width: 140px;
+		flex-shrink: 0;
 	}
 
-	.connect-section h2 {
-		font-size: 1.3rem;
-		margin-bottom: 0.75rem;
-		color: #1a1a2e;
+	.step-item {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.6rem 0.5rem;
+		color: #bbb;
+		font-size: 0.85rem;
+		border-radius: 6px;
+		transition: color 0.15s;
+	}
+
+	.step-item.active {
+		color: #4f8ef7;
+		font-weight: 600;
+	}
+
+	.step-item.done {
+		color: #16a34a;
+	}
+
+	.step-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	.wizard-panel {
+		flex: 1;
+		padding: 2rem;
+		overflow-y: auto;
+	}
+
+	.yaml-sidebar {
+		width: 340px;
+		flex-shrink: 0;
+		border-left: 1px solid #e8eaf0;
+		display: flex;
+		flex-direction: column;
+		padding: 0.75rem;
+		background: white;
+	}
+
+	/* ── Connect step ──────────────────────────────────────────────────────── */
+	.wizard-step {
+		max-width: 560px;
+	}
+
+	.wizard-step h2 {
+		margin: 0 0 0.25rem;
+		font-size: 1.2rem;
+	}
+
+	.subtitle {
+		margin: 0 0 1.5rem;
+		color: #777;
+		font-size: 0.9rem;
+	}
+
+	.sample-box {
+		background: #f0f4ff;
+		border: 1px solid #d0dcf7;
+		border-radius: 8px;
+		padding: 1rem 1.25rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.sample-box p {
+		margin: 0 0 0.75rem;
+		color: #444;
+		font-size: 0.875rem;
+	}
+
+	.btn-sample {
+		padding: 0.55rem 1.1rem;
+		background: #4f8ef7;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+	.btn-sample:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+	.btn-sample:hover:not(:disabled) {
+		background: #3a7ae8;
+	}
+
+	.error-inline {
+		margin-top: 0.5rem;
+		font-size: 0.8rem;
+		color: #dc2626;
+	}
+
+	.divider {
+		text-align: center;
+		color: #bbb;
+		font-size: 0.8rem;
+		margin: 1rem 0;
+		position: relative;
+	}
+
+	.connected-list {
+		margin-top: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.connected-item {
+		font-size: 0.875rem;
+		color: #16a34a;
+		font-weight: 500;
+	}
+
+	.wizard-actions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 1.25rem;
+	}
+
+	/* ── Shared button styles ─────────────────────────────────────────────── */
+	:global(.btn-primary) {
+		padding: 0.5rem 1.1rem;
+		background: #4f8ef7;
+		color: white;
+		border: 1px solid #3a7ae8;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+	:global(.btn-primary:disabled) {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	:global(.btn-primary:hover:not(:disabled)) {
+		background: #3a7ae8;
+	}
+
+	:global(.btn-secondary) {
+		padding: 0.5rem 1.1rem;
+		background: white;
+		color: #555;
+		border: 1px solid #d8dce8;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.875rem;
+	}
+	:global(.btn-secondary:hover) {
+		background: #f5f5f5;
+	}
+
+	.btn-ghost {
+		padding: 0.4rem 0.8rem;
+		background: none;
+		color: #666;
+		border: 1px solid #d8dce8;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.8rem;
+		white-space: nowrap;
+	}
+	.btn-ghost:hover {
+		background: #f5f5f5;
+	}
+
+	/* ── Dashboard ─────────────────────────────────────────────────────────── */
+	.dashboard-header {
+		flex-wrap: wrap;
+	}
+
+	.header-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.header-controls select {
+		padding: 0.35rem 0.6rem;
+		border: 1px solid #d8dce8;
+		border-radius: 6px;
+		font-size: 0.8rem;
+		background: white;
+		cursor: pointer;
+	}
+
+	.comparison-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.8rem;
+		color: #555;
+		cursor: pointer;
+	}
+
+	.yaml-overlay {
+		position: fixed;
+		top: 56px;
+		right: 0;
+		width: 360px;
+		height: calc(100vh - 56px);
+		border-left: 1px solid #e8eaf0;
+		background: white;
+		z-index: 100;
+		box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+	}
+
+	.dashboard-body {
+		flex: 1;
+		padding: 1.25rem 1.5rem;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+
+	.filter-bar {
+		background: white;
+		border: 1px solid #e8eaf0;
+		border-radius: 8px;
+		padding: 0.6rem 1rem;
+	}
+
+	.metric-cards {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.chart-container {
+		background: white;
+		border: 1px solid #e8eaf0;
+		border-radius: 8px;
+		height: 320px;
+		overflow: hidden;
+	}
+
+	.leaderboards {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		gap: 1rem;
+	}
+
+	/* ── Responsive ────────────────────────────────────────────────────────── */
+	@media (max-width: 640px) {
+		.step-nav {
+			display: none;
+		}
+
+		.wizard-panel {
+			padding: 1.25rem;
+		}
+
+		.yaml-sidebar {
+			display: none;
+		}
+
+		.dashboard-body {
+			padding: 0.75rem;
+		}
+
+		.yaml-overlay {
+			width: 100vw;
+		}
 	}
 </style>
