@@ -46,7 +46,7 @@
 		wizardStep.set('done');
 	}
 
-	$: canLaunch = !!dashboard && metricCards.length > 0 && !!timeseriesMeasure;
+	$: canLaunch = !!dashboard;
 </script>
 
 <div class="wizard-step">

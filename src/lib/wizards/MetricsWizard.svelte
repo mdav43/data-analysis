@@ -7,7 +7,7 @@
 	let timeseriesCol = '';
 	let defaultRange = 'P30D';
 	let defaultGrain: TimeGrain = 'day';
-	let measures: Measure[] = [];
+	let measures: Measure[] = [{ name: 'record_count', label: 'Count', expr: 'COUNT(*)', format: 'number' }];
 	let dimensions: Dimension[] = [];
 
 	// New measure form
@@ -69,7 +69,7 @@
 		wizardStep.set('dashboard');
 	}
 
-	$: canProceed = !!modelName && !!timeseriesCol && measures.length > 0;
+	$: canProceed = !!modelName && !!timeseriesCol;
 </script>
 
 <div class="wizard-step">
