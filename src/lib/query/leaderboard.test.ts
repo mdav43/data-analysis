@@ -27,4 +27,14 @@ describe('buildLeaderboardSQL', () => {
     const sql = buildLeaderboardSQL({ measure: revenue, model: 'orders_enriched', dimension: 'country', range, timeseries: 'ordered_at', filters, topN: 10 });
     expect(sql).toContain("segment = 'Enterprise'");
   });
+
+  it('stacks multiple filters in WHERE clause', () => {
+    const filters: DimensionFilter[] = [
+      { dimension: 'segment', value: 'Enterprise' },
+      { dimension: 'region', value: 'West' }
+    ];
+    const sql = buildLeaderboardSQL({ measure: revenue, model: 'orders_enriched', dimension: 'country', range, timeseries: 'ordered_at', filters, topN: 10 });
+    expect(sql).toContain("segment = 'Enterprise'");
+    expect(sql).toContain("region = 'West'");
+  });
 });
