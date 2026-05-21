@@ -1,0 +1,8 @@
+customer_id,name,country,segment
+101,Alice Smith,US,Enterprise
+102,Bob Jones,UK,SMB
+103,Carol Lee,CA,Enterprise
+104,David Park,US,SMB
+105,Eva Martinez,MX,SMB
+106,Frank Chen,SG,Enterprise
+107,Grace Kim,KR,Enterprise
