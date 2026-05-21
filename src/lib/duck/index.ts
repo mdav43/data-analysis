@@ -1,10 +1,5 @@
 // DuckDB WASM singleton
 import * as duckdb from '@duckdb/duckdb-wasm';
-// Vite resolves these ?url imports to content-hashed asset URLs at build time.
-// The /* @vite-ignore */ comments suppress warnings in environments where Vite
-// cannot statically analyse them (e.g. SSR pre-pass).
-import duckdbWasm from /* @vite-ignore */ '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import duckdbWorkerUrl from /* @vite-ignore */ '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 
 let db: duckdb.AsyncDuckDB | null = null;
 let conn: duckdb.AsyncDuckDBConnection | null = null;
@@ -12,19 +7,27 @@ let ready = false;
 
 /**
  * Lazy-initialise DuckDB WASM. Idempotent — safe to call multiple times.
- * Uses local package assets via Vite ?url imports (no CDN).
+ * Bundles are loaded from jsDelivr CDN to stay under Cloudflare Pages' 25 MiB
+ * per-file limit (the WASM assets are ~38 MiB).
  */
 export async function initDuckDB(): Promise<void> {
 	if (db) return; // idempotent
 
 	const logger = new duckdb.ConsoleLogger();
+	const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
 
 	try {
-		const worker = new Worker(duckdbWorkerUrl, { type: 'module' });
+		// Wrap the CDN worker in a same-origin blob URL to satisfy browser
+		// same-origin restrictions on Worker scripts.
+		const workerUrl = URL.createObjectURL(
+			new Blob([`importScripts("${bundle.mainWorker!}");`], { type: 'text/javascript' })
+		);
+		const worker = new Worker(workerUrl);
 		db = new duckdb.AsyncDuckDB(logger, worker);
-		await db.instantiate(duckdbWasm);
+		await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+		URL.revokeObjectURL(workerUrl);
 	} catch {
-		// Fallback for test environment (Worker is stubbed via vi.stubGlobal)
+		// Fallback for test environment where Worker/Blob APIs are stubbed
 		db = new duckdb.AsyncDuckDB(logger, {} as Worker);
 		await db.instantiate('mock.wasm');
 	}
