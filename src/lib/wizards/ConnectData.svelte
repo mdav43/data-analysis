@@ -11,6 +11,7 @@
 	let errorMsg = '';
 	let preview: SchemaPreview | null = null;
 	let sourceConfig: SourceConfig | null = null;
+	let fileInput: HTMLInputElement;
 
 	/** Sanitise a filename to a safe SQL table name. */
 	function toTableName(filename: string): string {
