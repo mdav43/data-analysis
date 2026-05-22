@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { models, dashboards, setDashboard, wizardStep } from '$lib/state/wizard';
+	import { getTableSchema } from '$lib/duck/schema';
 	import type { Measure, Dimension, TimeGrain, MeasureFormat } from '$lib/types';
 
 	$: modelName = $models[0]?.name ?? '';
@@ -19,6 +20,73 @@
 	// New dimension form
 	let dName = '';
 	let dCol = '';
+
+	// Schema suggestions
+	interface SuggestedDimension { column: string; selected: boolean }
+	interface SuggestedMeasure { column: string; selected: boolean }
+	let suggestions: { dimensions: SuggestedDimension[]; measures: SuggestedMeasure[] } | null = null;
+	let suggesting = false;
+	let suggestError = '';
+
+	const NUMERIC_TYPES = ['INTEGER', 'INT', 'BIGINT', 'DOUBLE', 'FLOAT', 'DECIMAL', 'HUGEINT', 'SMALLINT', 'TINYINT', 'UBIGINT', 'UINTEGER', 'USMALLINT', 'UTINYINT', 'REAL', 'NUMERIC'];
+	const TEMPORAL_TYPES = ['TIMESTAMP', 'DATE', 'TIME'];
+
+	function isNumeric(type: string): boolean {
+		const t = type.toUpperCase();
+		return NUMERIC_TYPES.some((n) => t.includes(n));
+	}
+
+	function isTemporal(type: string): boolean {
+		const t = type.toUpperCase();
+		return TEMPORAL_TYPES.some((n) => t.includes(n));
+	}
+
+	function humanize(col: string): string {
+		return col.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+	}
+
+	async function suggestFromSchema() {
+		if (!modelName) return;
+		suggesting = true;
+		suggestError = '';
+		try {
+			const columns = await getTableSchema(modelName);
+			const dimCandidates: SuggestedDimension[] = [];
+			const measureCandidates: SuggestedMeasure[] = [];
+			for (const col of columns) {
+				if (col.name === timeseriesCol) continue;
+				if (isTemporal(col.type)) continue;
+				if (isNumeric(col.type)) {
+					measureCandidates.push({ column: col.name, selected: true });
+				} else {
+					dimCandidates.push({ column: col.name, selected: true });
+				}
+			}
+			suggestions = { dimensions: dimCandidates, measures: measureCandidates };
+		} catch (e) {
+			suggestError = e instanceof Error ? e.message : 'Failed to load schema';
+		} finally {
+			suggesting = false;
+		}
+	}
+
+	function applysuggestions() {
+		if (!suggestions) return;
+		for (const d of suggestions.dimensions) {
+			if (d.selected && !dimensions.some((x) => x.column === d.column)) {
+				dimensions = [...dimensions, { name: d.column, column: d.column }];
+			}
+		}
+		for (const m of suggestions.measures) {
+			if (m.selected && !measures.some((x) => x.name === m.column)) {
+				measures = [
+					...measures,
+					{ name: m.column, label: `${humanize(m.column)} Overall`, expr: `SUM(${m.column})`, format: 'number' }
+				];
+			}
+		}
+		suggestions = null;
+	}
 
 	function addMeasure() {
 		if (!mName || !mExpr) return;
@@ -75,6 +143,40 @@
 <div class="wizard-step">
 	<h2>3. Metrics</h2>
 	<p class="subtitle">Define the timeseries column, measures, and dimensions.</p>
+
+	<div class="suggest-row">
+		<button class="btn-suggest" on:click={suggestFromSchema} disabled={!modelName || suggesting}>
+			{suggesting ? 'Loading schema…' : 'Suggest from schema'}
+		</button>
+		{#if suggestError}<span class="suggest-error">{suggestError}</span>{/if}
+	</div>
+
+	{#if suggestions}
+		<div class="suggestions-panel">
+			{#if suggestions.dimensions.length > 0}
+				<p class="suggest-section-label">Dimensions</p>
+				{#each suggestions.dimensions as d}
+					<label class="suggest-item">
+						<input type="checkbox" bind:checked={d.selected} />
+						<span>{d.column}</span>
+					</label>
+				{/each}
+			{/if}
+			{#if suggestions.measures.length > 0}
+				<p class="suggest-section-label">Measures</p>
+				{#each suggestions.measures as m}
+					<label class="suggest-item">
+						<input type="checkbox" bind:checked={m.selected} />
+						<span>{humanize(m.column)} Overall — <code>SUM({m.column})</code></span>
+					</label>
+				{/each}
+			{/if}
+			<div class="suggest-actions">
+				<button class="btn-add" on:click={applysuggestions}>Add selected</button>
+				<button class="btn-secondary" on:click={() => (suggestions = null)}>Cancel</button>
+			</div>
+		</div>
+	{/if}
 
 	<div class="form-group">
 		<label for="ts-col">Timeseries column</label>
@@ -271,6 +373,71 @@
 	}
 	.btn-add:hover:not(:disabled) {
 		background: #dce8ff;
+	}
+
+	.suggest-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.btn-suggest {
+		padding: 0.45rem 0.9rem;
+		background: #f0f4ff;
+		border: 1px solid #c0d2f7;
+		color: #3a5ab7;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.8rem;
+	}
+	.btn-suggest:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.btn-suggest:hover:not(:disabled) {
+		background: #dce8ff;
+	}
+
+	.suggest-error {
+		font-size: 0.8rem;
+		color: #dc2626;
+	}
+
+	.suggestions-panel {
+		background: #f8faff;
+		border: 1px solid #d0dcf7;
+		border-radius: 8px;
+		padding: 0.9rem 1rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.suggest-section-label {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #777;
+		margin: 0.6rem 0 0.3rem;
+	}
+	.suggest-section-label:first-child {
+		margin-top: 0;
+	}
+
+	.suggest-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.825rem;
+		color: #333;
+		margin-bottom: 0.25rem;
+		cursor: pointer;
+	}
+
+	.suggest-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.75rem;
 	}
 
 	.actions {
