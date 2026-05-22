@@ -6,7 +6,7 @@
 	import { buildTimeseriesSQL } from '$lib/query/timeseries';
 	import { buildLeaderboardSQL } from '$lib/query/leaderboard';
 	import { buildComparisonRange, calculateDelta } from '$lib/query/comparison';
-	import { resolveTimeRange } from '$lib/query/timerange';
+	import { resolveTimeRange, fetchDataTimeRange } from '$lib/query/timerange';
 	import { wizardStep, sources, models, dashboards, addSource, setModel, setDashboard, loadPersistedConfig } from '$lib/state/wizard';
 	import { activeRange, activeGrain, activeFilters, comparisonEnabled } from '$lib/state/dashboard';
 
@@ -20,7 +20,7 @@
 	import Leaderboard from '$lib/components/Leaderboard.svelte';
 	import FilterChips from '$lib/components/FilterChips.svelte';
 
-	import type { DashboardConfig, TimeseriesRow, LeaderboardRow, DimensionFilter, TimeGrain, TimeRangePreset } from '$lib/types';
+	import type { DashboardConfig, TimeseriesRow, LeaderboardRow, DimensionFilter, TimeGrain, TimeRange, TimeRangePreset } from '$lib/types';
 
 	// ── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,22 @@
 
 	// Sample CSV files that live under /static and can be re-fetched on reload.
 	const SAMPLE_FILES = new Set(['sample_orders.csv', 'sample_customers.csv']);
+
+	// The data-derived time extent; null until DuckDB is queried.
+	let dataTimeRange: TimeRange | null = null;
+
+	async function initializeDataRange(model: string, timeseries: string): Promise<void> {
+		try {
+			dataTimeRange = await fetchDataTimeRange(model, timeseries);
+			rangePreset = 'ALL';
+			activeRange.set(dataTimeRange);
+		} catch {
+			// Empty table or unavailable — fall back to a wide window
+			dataTimeRange = null;
+			rangePreset = 'P365D';
+			activeRange.set(resolveTimeRange('P365D'));
+		}
+	}
 
 	onMount(async () => {
 		bootStatus = 'booting';
@@ -52,6 +68,11 @@
 					);
 				}
 				await query(buildCreateViewSQL(model.name, model.sql)).catch(() => {});
+				const dash = $dashboards[0];
+				if (dash) {
+					await initializeDataRange(dash.model, dash.timeseries);
+					activeGrain.set(dash.default_grain ?? 'day');
+				}
 			}
 			bootStatus = 'ready';
 		} catch (e) {
@@ -110,7 +131,7 @@
 					leaderboard_dimensions: ['country', 'segment']
 				}
 			});
-			activeRange.set(resolveTimeRange('P365D'));
+			await initializeDataRange('orders_enriched', 'ordered_at');
 			activeGrain.set('month');
 			wizardStep.set('done');
 		} catch (e) {
@@ -344,17 +365,24 @@
 	// ── Time range UI ────────────────────────────────────────────────────────────
 
 	const PRESETS: { label: string; value: TimeRangePreset }[] = [
+		{ label: 'All data', value: 'ALL' },
 		{ label: 'Last 7 days', value: 'P7D' },
 		{ label: 'Last 30 days', value: 'P30D' },
 		{ label: 'Last 90 days', value: 'P90D' },
 		{ label: 'Last 365 days', value: 'P365D' }
 	];
 
-	let rangePreset: TimeRangePreset = 'P365D';
+	let rangePreset: TimeRangePreset = 'ALL';
 
 	function handleRangeChange(preset: string) {
 		rangePreset = preset as TimeRangePreset;
-		activeRange.set(resolveTimeRange(preset as TimeRangePreset));
+		if (preset === 'ALL') {
+			if (dataTimeRange) activeRange.set(dataTimeRange);
+		} else {
+			// Resolve relative to the data's max date, not the current clock
+			const anchor = dataTimeRange?.end;
+			activeRange.set(resolveTimeRange(preset as Exclude<TimeRangePreset, 'ALL'>, anchor));
+		}
 	}
 
 	// ── Connect handler ──────────────────────────────────────────────────────────

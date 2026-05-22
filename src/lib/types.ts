@@ -63,7 +63,7 @@ export interface TimeRange {
 	end: Date;
 }
 
-export type TimeRangePreset = 'P7D' | 'P30D' | 'P90D' | 'P365D';
+export type TimeRangePreset = 'P7D' | 'P30D' | 'P90D' | 'P365D' | 'ALL';
 
 // ── Query Results ─────────────────────────────────────────────────────────────
 export interface TotalsRow {
