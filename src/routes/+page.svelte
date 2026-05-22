@@ -28,14 +28,29 @@
 	let bootError = '';
 	let yamlOpen = false;
 
+	// Sample CSV files that live under /static and can be re-fetched on reload.
+	const SAMPLE_FILES = new Set(['sample_orders.csv', 'sample_customers.csv']);
+
 	onMount(async () => {
 		bootStatus = 'booting';
 		try {
 			await initDuckDB();
 			loadPersistedConfig();
-			// If persisted config has a model, recreate the view
+			// If persisted config has a model, recreate source tables then the view.
+			// Source tables are lost when the DuckDB WASM instance is reset (e.g. page
+			// refresh), so we re-fetch any built-in sample files and recreate their
+			// tables before building the view.
 			const model = $models[0];
 			if (model) {
+				for (const src of $sources) {
+					if (!SAMPLE_FILES.has(src.file)) continue;
+					const res = await fetch(`/${src.file}`);
+					const buf = await res.arrayBuffer();
+					await registerFileBuffer(src.file, new Uint8Array(buf));
+					await query(
+						`CREATE OR REPLACE TABLE ${src.name} AS SELECT * FROM read_csv_auto('${src.file}')`
+					);
+				}
 				await query(buildCreateViewSQL(model.name, model.sql)).catch(() => {});
 			}
 			bootStatus = 'ready';
