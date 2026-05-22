@@ -259,6 +259,57 @@
 		}
 	}
 
+	// ── Raw data ─────────────────────────────────────────────────────────────────
+
+	let rawDataOpen = false;
+	let rawRows: Record<string, unknown>[] = [];
+	let rawLoading = false;
+	let rawError: string | null = null;
+	let rawSeq = 0;
+
+	function buildRawDataSQL(
+		model: string,
+		timeseries: string,
+		range: { start: Date; end: Date },
+		filters: DimensionFilter[],
+		limit = 500
+	): string {
+		const conditions: string[] = [
+			`${timeseries} >= '${range.start.toISOString()}'`,
+			`${timeseries} < '${range.end.toISOString()}'`
+		];
+		for (const f of filters) {
+			conditions.push(`${f.dimension} = '${f.value.replace(/'/g, "''")}'`);
+		}
+		return `SELECT * FROM ${model}\nWHERE ${conditions.join('\n  AND ')}\nORDER BY ${timeseries} DESC\nLIMIT ${limit}`;
+	}
+
+	async function fetchRawData(
+		d: DashboardConfig,
+		range: { start: Date; end: Date },
+		filters: DimensionFilter[]
+	) {
+		const seq = ++rawSeq;
+		rawLoading = true;
+		rawError = null;
+		try {
+			const sql = buildRawDataSQL(d.model, d.timeseries, range, filters);
+			const rows = await query<Record<string, unknown>>(sql);
+			if (seq !== rawSeq) return;
+			rawRows = rows;
+		} catch (e) {
+			if (seq !== rawSeq) return;
+			rawError = String(e);
+			rawRows = [];
+		} finally {
+			if (seq === rawSeq) rawLoading = false;
+		}
+	}
+
+	$: if (rawDataOpen && bootStatus === 'ready' && dashboard) {
+		fetchRawData(dashboard, $activeRange, $activeFilters);
+	}
+
 	// ── Filter management ────────────────────────────────────────────────────────
 
 	function addFilter(dimension: string, value: string) {
@@ -438,6 +489,11 @@
 					Compare
 				</label>
 
+				<!-- Raw data toggle -->
+				<button class="btn-ghost" on:click={() => (rawDataOpen = !rawDataOpen)}>
+					{rawDataOpen ? 'Hide data' : 'Raw data'}
+				</button>
+
 				<!-- YAML toggle -->
 				<button class="btn-ghost" on:click={() => (yamlOpen = !yamlOpen)}>
 					{yamlOpen ? 'Hide YAML' : 'YAML'}
@@ -516,6 +572,49 @@
 							on:filter={(e) => addFilter(e.detail.dimension, e.detail.value)}
 						/>
 					{/each}
+				</div>
+			{/if}
+
+			<!-- Raw data table -->
+			{#if rawDataOpen}
+				<div class="raw-data-section">
+					<div class="raw-data-header">
+						<h3>Raw data</h3>
+						{#if !rawLoading && !rawError}
+							<span class="raw-data-count">
+								{rawRows.length}{rawRows.length === 500 ? ' rows (limit 500)' : ' rows'}
+							</span>
+						{/if}
+					</div>
+					{#if rawLoading}
+						<div class="raw-status">Loading…</div>
+					{:else if rawError}
+						<div class="raw-status raw-error">{rawError}</div>
+					{:else if rawRows.length === 0}
+						<div class="raw-status">No rows match the current filters and time range.</div>
+					{:else}
+						{@const columns = Object.keys(rawRows[0])}
+						<div class="raw-table-wrap">
+							<table class="raw-table">
+								<thead>
+									<tr>
+										{#each columns as col}
+											<th>{col}</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each rawRows as row}
+										<tr>
+											{#each columns as col}
+												<td title={String(row[col] ?? '')}>{row[col] ?? ''}</td>
+											{/each}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</main>
@@ -865,6 +964,87 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 		gap: 1rem;
+	}
+
+	/* ── Raw data ──────────────────────────────────────────────────────────── */
+	.raw-data-section {
+		background: white;
+		border: 1px solid #e8eaf0;
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.raw-data-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.65rem 1rem;
+		border-bottom: 1px solid #e8eaf0;
+		background: #f8faff;
+	}
+
+	.raw-data-header h3 {
+		margin: 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: #555;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.raw-data-count {
+		font-size: 0.75rem;
+		color: #999;
+	}
+
+	.raw-status {
+		padding: 1.5rem;
+		text-align: center;
+		font-size: 0.85rem;
+		color: #888;
+	}
+
+	.raw-status.raw-error {
+		color: #dc2626;
+	}
+
+	.raw-table-wrap {
+		overflow-x: auto;
+		max-height: 420px;
+		overflow-y: auto;
+	}
+
+	.raw-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.8rem;
+	}
+
+	.raw-table th {
+		position: sticky;
+		top: 0;
+		background: #f5f7fc;
+		padding: 0.45rem 0.75rem;
+		text-align: left;
+		font-weight: 600;
+		color: #555;
+		border-bottom: 1px solid #e8eaf0;
+		white-space: nowrap;
+		z-index: 1;
+	}
+
+	.raw-table td {
+		padding: 0.35rem 0.75rem;
+		border-bottom: 1px solid #f0f2f8;
+		color: #333;
+		white-space: nowrap;
+		max-width: 220px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.raw-table tbody tr:hover {
+		background: #f8faff;
 	}
 
 	/* ── Responsive ────────────────────────────────────────────────────────── */
