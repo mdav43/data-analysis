@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { dashboards, setDashboard, wizardStep } from '$lib/state/wizard';
 	import { activeRange, comparisonEnabled } from '$lib/state/dashboard';
-	import { resolveTimeRange } from '$lib/query/timerange';
+	import { resolveTimeRange, fetchDataTimeRange } from '$lib/query/timerange';
 	import type { TimeRangePreset } from '$lib/types';
 
 	$: dashboard = $dashboards[0];
@@ -13,7 +13,7 @@
 	let timeseriesMeasure = dashboard?.layout.timeseries_measure ?? '';
 	let leaderboardDimensions: string[] = dashboard?.layout.leaderboard_dimensions ?? [];
 	let enableComparison = dashboard?.comparison?.enabled ?? false;
-	let defaultRange = (dashboard?.default_time_range ?? 'P30D') as TimeRangePreset;
+	let defaultRange = (dashboard?.default_time_range ?? 'ALL') as TimeRangePreset;
 
 	function toggleMetricCard(mname: string) {
 		metricCards = metricCards.includes(mname)
@@ -27,7 +27,7 @@
 			: [...leaderboardDimensions, dname];
 	}
 
-	function handleLaunch() {
+	async function handleLaunch() {
 		if (!dashboard) return;
 		const updated = {
 			...dashboard,
@@ -41,8 +41,17 @@
 			}
 		};
 		setDashboard(updated);
-		activeRange.set(resolveTimeRange(defaultRange));
 		comparisonEnabled.set(enableComparison);
+		try {
+			const dataRange = await fetchDataTimeRange(updated.model, updated.timeseries);
+			activeRange.set(
+				defaultRange === 'ALL'
+					? dataRange
+					: resolveTimeRange(defaultRange as Exclude<TimeRangePreset, 'ALL'>, dataRange.end)
+			);
+		} catch {
+			activeRange.set(resolveTimeRange('P365D'));
+		}
 		wizardStep.set('done');
 	}
 
@@ -61,6 +70,7 @@
 	<div class="form-group">
 		<label for="default-range">Default time range</label>
 		<select id="default-range" bind:value={defaultRange}>
+			<option value="ALL">All data</option>
 			<option value="P7D">Last 7 days</option>
 			<option value="P30D">Last 30 days</option>
 			<option value="P90D">Last 90 days</option>
