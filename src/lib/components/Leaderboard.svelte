@@ -31,140 +31,98 @@
 	}
 </script>
 
-<div class="leaderboard">
-	<h3>{title}</h3>
+<div class="dl-panel leaderboard">
+	<div class="dl-panel-header">
+		<span class="dl-panel-title">{title}</span>
+	</div>
 	{#if loading}
-		<div class="state-msg">Loading…</div>
+		<div class="state-msg">
+			<span class="dl-spinner"></span>
+		</div>
 	{:else if error}
 		<div class="state-msg error">{error}</div>
 	{:else if rows.length === 0}
 		<div class="state-msg">No data for this period</div>
 	{:else}
-		<table>
-			<thead>
-				<tr>
-					<th class="rank">#</th>
-					<th>{dimension}</th>
-					<th class="num">Value</th>
-					{#if comparisonEnabled}
-						<th class="num">vs prior</th>
-					{/if}
-				</tr>
-			</thead>
-			<tbody>
-				{#each rows as row, i}
-					<!-- svelte-ignore a11y-interactive-supports-focus -->
-					<tr
-						class="clickable"
-						on:click={() => handleRowClick(row.dimension_value)}
-						on:keydown={(e) => e.key === 'Enter' && handleRowClick(row.dimension_value)}
-						role="button"
-						tabindex="0"
-						title="Filter by {dimension} = {row.dimension_value}"
-					>
-						<td class="rank">{i + 1}</td>
-						<td>{row.dimension_value}</td>
-						<td class="num">{formatMeasureValue(row.value, format)}</td>
+		<div class="table-wrap">
+			<table class="dl-table">
+				<thead>
+					<tr>
+						<th class="rank">#</th>
+						<th>{dimension}</th>
+						<th class="num">value</th>
 						{#if comparisonEnabled}
-							<td class="num delta {row.delta != null ? deltaClass(row.delta) : ''}">
-								{#if row.delta != null}
-									{formatDelta(row.delta)}
-									{#if row.delta_pct != null}
-										<span class="pct">({formatPct(row.delta_pct)})</span>
-									{/if}
-								{:else}
-									—
-								{/if}
-							</td>
+							<th class="num">vs prior</th>
 						{/if}
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each rows as row, i}
+						<!-- svelte-ignore a11y-interactive-supports-focus -->
+						<tr
+							class="clickable"
+							on:click={() => handleRowClick(row.dimension_value)}
+							on:keydown={(e) => e.key === 'Enter' && handleRowClick(row.dimension_value)}
+							role="button"
+							tabindex="0"
+							title="Filter: {dimension} = {row.dimension_value}"
+						>
+							<td class="rank">{i + 1}</td>
+							<td class="mono">{row.dimension_value}</td>
+							<td class="num mono">{formatMeasureValue(row.value, format)}</td>
+							{#if comparisonEnabled}
+								<td class="num mono dl-delta {row.delta != null ? deltaClass(row.delta) : ''}">
+									{#if row.delta != null}
+										{formatDelta(row.delta)}
+										{#if row.delta_pct != null}
+											<span class="pct">({formatPct(row.delta_pct)})</span>
+										{/if}
+									{:else}
+										—
+									{/if}
+								</td>
+							{/if}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
 </div>
 
 <style>
-	.leaderboard {
-		background: white;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
-		padding: 1rem;
-		overflow: auto;
-	}
+	.leaderboard { overflow: hidden; }
 
-	h3 {
-		margin: 0 0 0.75rem;
-		font-size: 0.8rem;
-		font-weight: 700;
-		color: #666;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.875rem;
-	}
-
-	th {
-		text-align: left;
-		padding: 0.35rem 0.5rem;
-		border-bottom: 2px solid #e8eaf0;
-		color: #999;
-		font-weight: 600;
-		font-size: 0.75rem;
-	}
-
-	td {
-		padding: 0.4rem 0.5rem;
-		border-bottom: 1px solid #f5f5f5;
-	}
+	.table-wrap { overflow: auto; }
 
 	.rank {
-		color: #bbb;
-		width: 1.5rem;
+		color: var(--fg-faint);
+		width: 28px;
 		text-align: center;
-		font-size: 0.75rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-10);
 	}
 
-	.num {
-		text-align: right;
-	}
+	.num { text-align: right; }
 
-	.clickable {
-		cursor: pointer;
-		transition: background 0.1s;
-	}
-	.clickable:hover {
-		background: #f5f7ff;
-	}
+	.mono { font-family: var(--font-mono); }
 
-	.delta.up {
-		color: #16a34a;
-		font-weight: 600;
-	}
-	.delta.down {
-		color: #dc2626;
-		font-weight: 600;
-	}
-
-	.pct {
-		font-size: 0.7rem;
-		opacity: 0.8;
-		font-weight: normal;
-		margin-left: 0.2rem;
-	}
+	.clickable { cursor: pointer; }
 
 	.state-msg {
-		color: #bbb;
-		font-size: 0.875rem;
-		padding: 1rem 0;
-		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--sp-9);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
+		color: var(--fg-muted);
 	}
-	.state-msg.error {
-		color: #dc2626;
-		text-align: left;
+	.state-msg.error { color: var(--danger-text); justify-content: flex-start; padding: var(--sp-6); }
+
+	.pct {
+		font-size: var(--fs-10);
+		color: var(--fg-subtle);
+		margin-left: 2px;
 	}
 </style>

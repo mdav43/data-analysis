@@ -59,7 +59,8 @@
 </script>
 
 <div class="wizard-step">
-	<h2>4. Dashboard</h2>
+	<div class="eyebrow" style="margin-bottom:var(--sp-3)">Step 04</div>
+	<h2>Dashboard</h2>
 	<p class="subtitle">Configure your dashboard layout and settings.</p>
 
 	<div class="form-group">
@@ -143,95 +144,88 @@
 </div>
 
 <style>
-	.wizard-step {
-		max-width: 520px;
-	}
+	.wizard-step { max-width: 560px; }
 
 	h2 {
-		margin: 0 0 0.25rem;
-		font-size: 1.2rem;
-		color: #1a1a2e;
+		font-size: var(--fs-22);
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--fg);
+		margin: 0 0 var(--sp-2);
 	}
 
 	.subtitle {
-		margin: 0 0 1.5rem;
-		color: #777;
-		font-size: 0.9rem;
+		font-size: var(--fs-13);
+		color: var(--fg-muted);
+		margin: 0 0 var(--sp-8);
 	}
 
-	.form-group {
-		margin-bottom: 1rem;
-	}
+	.form-group { margin-bottom: var(--sp-6); }
 
 	label:not(.check-item) {
 		display: block;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #555;
-		margin-bottom: 0.3rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		font-weight: 500;
+		color: var(--fg-muted);
+		margin-bottom: var(--sp-2);
+		letter-spacing: 0.02em;
 	}
 
 	input[type='text'],
 	select {
 		width: 100%;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
-		font-size: 0.875rem;
+		height: 28px;
+		padding: 0 var(--sp-4);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--r-2);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
 		box-sizing: border-box;
-		background: white;
+		background: var(--surface);
+		color: var(--fg);
+	}
+	input:focus, select:focus {
+		outline: 1px solid var(--accent);
+		outline-offset: -1px;
+		border-color: var(--accent);
 	}
 
-	section {
-		margin-bottom: 1.5rem;
-	}
+	section { margin-bottom: var(--sp-8); }
 
 	h3 {
-		font-size: 0.75rem;
-		font-weight: 700;
-		color: #777;
+		font-family: var(--font-mono);
+		font-size: var(--fs-10);
+		font-weight: 500;
+		color: var(--fg-subtle);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin: 0 0 0.6rem;
+		letter-spacing: 0.06em;
+		margin: 0 0 var(--sp-4);
 	}
 
 	.hint {
 		font-weight: normal;
 		text-transform: none;
 		letter-spacing: 0;
-		color: #aaa;
-		font-size: 0.72rem;
+		color: var(--fg-faint);
+		font-size: var(--fs-10);
 	}
 
-	.check-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
+	.check-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 
 	.check-item {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.875rem;
-		color: #333;
+		gap: var(--sp-4);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
+		color: var(--fg);
 		cursor: pointer;
 	}
 
-	.check-item input[type='checkbox'] {
-		width: auto;
-		cursor: pointer;
-	}
+	.check-item input[type='checkbox'] { width: auto; cursor: pointer; accent-color: var(--accent); }
 
-	.empty-hint {
-		color: #bbb;
-		font-size: 0.8rem;
-	}
+	.empty-hint { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--fg-muted); }
 
-	.actions {
-		display: flex;
-		gap: 0.75rem;
-		justify-content: flex-end;
-		margin-top: 1.5rem;
-	}
+	.actions { display: flex; gap: var(--sp-4); justify-content: flex-end; margin-top: var(--sp-8); }
 </style>

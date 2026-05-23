@@ -55,8 +55,9 @@
 </script>
 
 <div class="wizard-step">
-	<h2>2. Model</h2>
-	<p class="subtitle">Select a base table and optionally join another table.</p>
+	<div class="eyebrow" style="margin-bottom:var(--sp-3)">Step 02</div>
+	<h2 class="step-heading">Model</h2>
+	<p class="step-sub">Select a base table and optionally join another table.</p>
 
 	{#if tableNames.length === 0}
 		<div class="empty-hint">No tables registered yet — go back to Connect Data.</div>
@@ -128,118 +129,93 @@
 </div>
 
 <style>
-	.wizard-step {
-		max-width: 560px;
+	.wizard-step { max-width: 560px; }
+
+	.step-heading {
+		font-size: var(--fs-22);
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--fg);
+		margin: 0 0 var(--sp-2);
 	}
 
-	h2 {
-		margin: 0 0 0.25rem;
-		font-size: 1.2rem;
-		color: #1a1a2e;
+	.step-sub {
+		font-size: var(--fs-13);
+		color: var(--fg-muted);
+		margin: 0 0 var(--sp-8);
 	}
 
-	.subtitle {
-		margin: 0 0 1.5rem;
-		color: #777;
-		font-size: 0.9rem;
-	}
-
-	.form-group {
-		margin-bottom: 1rem;
-	}
+	.form-group { margin-bottom: var(--sp-6); }
 
 	label {
 		display: block;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #555;
-		margin-bottom: 0.3rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		font-weight: 500;
+		color: var(--fg-muted);
+		margin-bottom: var(--sp-2);
+		letter-spacing: 0.02em;
 	}
 
-	.opt {
-		font-weight: normal;
-		color: #bbb;
-	}
+	.opt { font-weight: normal; color: var(--fg-faint); }
 
 	select,
 	input[type='text'] {
 		width: 100%;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
-		font-size: 0.875rem;
+		height: 28px;
+		padding: 0 var(--sp-4);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--r-2);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
 		box-sizing: border-box;
-		background: white;
+		background: var(--surface);
+		color: var(--fg);
+	}
+	select:focus, input:focus {
+		outline: 1px solid var(--accent);
+		outline-offset: -1px;
+		border-color: var(--accent);
 	}
 
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-	}
+	.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6); }
 
 	.sql-editor {
 		width: 100%;
-		font-family: 'Menlo', 'Monaco', monospace;
-		font-size: 0.8rem;
-		padding: 0.5rem;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		line-height: var(--lh-normal);
+		padding: var(--sp-4) var(--sp-5);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--r-2);
 		box-sizing: border-box;
 		resize: vertical;
-		background: #fafbff;
+		background: var(--bg-subtle);
+		color: var(--fg);
 	}
+	.sql-editor:focus { outline: 1px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 
 	.error-box {
-		padding: 0.6rem 0.75rem;
-		background: #fff0f0;
-		color: #dc2626;
-		border-radius: 6px;
-		font-size: 0.8rem;
-		margin-bottom: 1rem;
-		border: 1px solid #ffd0d0;
+		padding: var(--sp-4) var(--sp-5);
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		border-radius: var(--r-2);
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		margin-bottom: var(--sp-6);
+		border: 1px solid var(--danger);
 	}
 
 	.empty-hint {
-		color: #aaa;
-		font-size: 0.875rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
+		color: var(--fg-muted);
 	}
 
 	.actions {
 		display: flex;
-		gap: 0.75rem;
+		gap: var(--sp-4);
 		justify-content: flex-end;
-		margin-top: 1.5rem;
-	}
-
-	:global(.btn-primary) {
-		padding: 0.5rem 1.1rem;
-		background: #4f8ef7;
-		color: white;
-		border: 1px solid #3a7ae8;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 600;
-	}
-	:global(.btn-primary:disabled) {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	:global(.btn-primary:hover:not(:disabled)) {
-		background: #3a7ae8;
-	}
-
-	:global(.btn-secondary) {
-		padding: 0.5rem 1.1rem;
-		background: white;
-		color: #555;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.875rem;
-	}
-	:global(.btn-secondary:hover) {
-		background: #f5f5f5;
+		margin-top: var(--sp-8);
 	}
 </style>

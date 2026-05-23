@@ -1,5 +1,5 @@
 <script lang="ts">
-	// root layout
+	import '../app.css';
 </script>
 
 <slot />

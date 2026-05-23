@@ -50,8 +50,6 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
 		overflow: hidden;
 	}
 
@@ -59,72 +57,75 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 0.4rem 0.75rem;
-		background: #f8f9fc;
-		border-bottom: 1px solid #e8eaf0;
+		padding: var(--sp-3) var(--sp-6);
+		background: var(--surface-2);
+		border-bottom: 1px solid var(--border);
 		flex-shrink: 0;
+		min-height: 36px;
 	}
 
 	.title {
-		font-size: 0.7rem;
-		font-weight: 700;
-		color: #999;
+		font-family: var(--font-mono);
+		font-size: var(--fs-10);
+		font-weight: 500;
+		color: var(--fg-subtle);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 	}
 
 	.actions {
 		display: flex;
-		gap: 0.4rem;
+		gap: var(--sp-3);
 	}
 
 	button {
-		font-size: 0.75rem;
-		padding: 0.2rem 0.55rem;
-		border-radius: 4px;
+		height: 22px;
+		padding: 0 var(--sp-4);
+		border-radius: var(--r-2);
 		cursor: pointer;
+		font-family: var(--font-sans);
+		font-size: var(--fs-11);
+		font-weight: 500;
 		border: 1px solid transparent;
 	}
 
 	.btn-apply {
-		background: #4f8ef7;
-		color: white;
-		border-color: #3a7ae8;
+		background: var(--accent);
+		color: var(--accent-fg);
+		border-color: var(--accent);
 	}
-	.btn-apply:hover {
-		background: #3a7ae8;
-	}
+	.btn-apply:hover { background: var(--accent-hover); }
 
 	.btn-reset {
-		background: white;
-		color: #666;
-		border-color: #ddd;
+		background: var(--surface);
+		color: var(--fg-muted);
+		border-color: var(--border-strong);
 	}
-	.btn-reset:hover {
-		background: #f5f5f5;
-	}
+	.btn-reset:hover { background: var(--surface-hover); }
 
 	.editor {
 		flex: 1;
 		width: 100%;
-		font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-		font-size: 0.72rem;
-		line-height: 1.6;
-		padding: 0.75rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		line-height: var(--lh-normal);
+		padding: var(--sp-6);
 		border: none;
 		resize: none;
 		outline: none;
-		color: #1a1a2e;
-		background: #fafbff;
+		color: var(--fg);
+		background: var(--bg-subtle);
 		box-sizing: border-box;
 	}
+	.editor::placeholder { color: var(--fg-faint); }
 
 	.parse-error {
-		padding: 0.5rem 0.75rem;
-		background: #fff0f0;
-		color: #dc2626;
-		font-size: 0.72rem;
-		border-top: 1px solid #ffaaaa;
+		padding: var(--sp-4) var(--sp-6);
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		border-top: 1px solid var(--danger);
 		flex-shrink: 0;
 	}
 </style>

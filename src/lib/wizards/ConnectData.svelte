@@ -116,7 +116,7 @@
 		aria-label="Upload CSV file — drag and drop or click to browse"
 	>
 		<input bind:this={fileInput} type="file" accept=".csv" on:change={onInputChange} class="file-input" />
-		<span class="drop-icon">📂</span>
+		<span class="drop-icon">⬆</span>
 		<span class="drop-text">
 			{#if status === 'loading'}
 				Processing…
@@ -136,7 +136,7 @@
 	<!-- Loading spinner -->
 	{#if status === 'loading'}
 		<div class="loading-row" role="status">
-			<div class="spinner"></div>
+			<span class="dl-spinner"></span>
 			<span>Registering file and reading schema…</span>
 		</div>
 	{/if}
@@ -200,112 +200,98 @@
 	.connect-data {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--sp-6);
 	}
 
 	.drop-zone {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 2rem 1rem;
-		border: 2px dashed #b0b8d0;
-		border-radius: 10px;
+		gap: var(--sp-4);
+		padding: var(--sp-10) var(--sp-7);
+		border: 1.5px dashed var(--border-strong);
+		border-radius: var(--r-3);
 		cursor: pointer;
-		transition: border-color 0.2s, background-color 0.2s;
-		background: #fafbff;
-		color: #555;
+		transition: border-color 0.15s, background 0.15s;
+		background: var(--bg-subtle);
+		color: var(--fg-muted);
 		text-align: center;
 	}
 
 	.drop-zone:hover,
 	.drag-over {
-		border-color: #4f8ef7;
-		background: #f0f4ff;
+		border-color: var(--accent);
+		background: var(--accent-bg);
+		color: var(--accent-text);
 	}
 
-	.file-input {
-		display: none;
-	}
+	.file-input { display: none; }
 
-	.drop-icon {
-		font-size: 2rem;
-		line-height: 1;
-	}
+	.drop-icon { font-size: 1.5rem; line-height: 1; }
 
 	.drop-text {
-		font-size: 0.95rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
 	}
 
 	.error-box {
-		padding: 0.75rem 1rem;
-		background: #fff0f0;
-		border: 1px solid #ffaaaa;
-		border-radius: 6px;
-		color: #c0392b;
-		font-size: 0.9rem;
+		padding: var(--sp-4) var(--sp-6);
+		background: var(--danger-bg);
+		border: 1px solid var(--danger);
+		border-radius: var(--r-2);
+		color: var(--danger-text);
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
 	}
 
 	.loading-row {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		color: #4f5b7a;
-		font-size: 0.9rem;
-	}
-
-	.spinner {
-		width: 18px;
-		height: 18px;
-		border: 2px solid #c0caff;
-		border-top-color: #4f8ef7;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+		gap: var(--sp-4);
+		color: var(--fg-muted);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
 	}
 
 	.preview {
-		background: #fafbff;
-		border: 1px solid #e0e4f0;
-		border-radius: 8px;
-		padding: 1rem 1.25rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--r-3);
+		overflow: hidden;
 	}
 
 	.preview-title {
-		margin: 0 0 0.75rem;
-		font-size: 1rem;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--sp-4);
 		flex-wrap: wrap;
+		padding: var(--sp-4) var(--sp-6);
+		border-bottom: 1px solid var(--border);
+		margin: 0;
 	}
 
-	.row-badge {
-		background: #e8eeff;
-		color: #4f5b9a;
-		font-size: 0.8rem;
-		font-weight: 600;
-		padding: 0.2em 0.6em;
-		border-radius: 99px;
+	.preview-title code {
+		font-family: var(--font-mono);
+		font-size: var(--fs-13);
+		font-weight: 500;
+		color: var(--fg);
 	}
 
 	.preview h4 {
-		font-size: 0.85rem;
+		font-family: var(--font-mono);
+		font-size: var(--fs-10);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #888;
-		margin: 1rem 0 0.4rem;
+		letter-spacing: 0.06em;
+		color: var(--fg-subtle);
+		margin: 0;
+		padding: var(--sp-5) var(--sp-6) var(--sp-3);
 	}
 
 	.schema-table,
 	.sample-table {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 0.875rem;
+		font-size: var(--fs-12);
 	}
 
 	.schema-table th,
@@ -313,26 +299,29 @@
 	.sample-table th,
 	.sample-table td {
 		text-align: left;
-		padding: 0.35rem 0.6rem;
-		border-bottom: 1px solid #eaecf4;
+		padding: 6px var(--sp-6);
+		border-bottom: 1px solid var(--divider);
 	}
 
 	.schema-table th,
 	.sample-table th {
-		background: #f0f3fb;
-		font-weight: 600;
-		color: #333;
+		background: var(--surface-2);
+		font-family: var(--font-mono);
+		font-size: var(--fs-10);
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--fg-subtle);
+		border-bottom: 1px solid var(--border);
 	}
 
 	.type-cell {
-		color: #6b6bcc;
-		font-family: monospace;
-		font-size: 0.82rem;
+		color: var(--t-id);
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
 	}
 
 	.sample-wrapper {
 		overflow-x: auto;
-		border-radius: 6px;
-		border: 1px solid #e0e4f0;
 	}
 </style>

@@ -27,6 +27,8 @@
 	let bootStatus: 'idle' | 'booting' | 'ready' | 'error' = 'idle';
 	let bootError = '';
 	let yamlOpen = false;
+	let theme: 'light' | 'dark' = 'light';
+	function toggleTheme() { theme = theme === 'light' ? 'dark' : 'light'; }
 
 	// Sample CSV files that live under /static and can be re-fetched on reload.
 	const SAMPLE_FILES = new Set(['sample_orders.csv', 'sample_customers.csv']);
@@ -410,185 +412,246 @@
 	$: dashboard = $dashboards[0];
 </script>
 
+<!-- ── Root wrapper (theme applied here) ───────────────────────────────────── -->
+<div class="app theme-{theme}">
+
 <!-- ── Boot screen ─────────────────────────────────────────────────────────── -->
 {#if bootStatus === 'idle' || bootStatus === 'booting'}
 	<div class="boot-screen">
-		<div class="spinner-lg"></div>
-		<p>Initializing DuckDB WASM…</p>
+		<div class="dl-spinner" style="width:32px;height:32px;border-width:2.5px;"></div>
+		<p class="boot-msg">Initializing DuckDB WASM…</p>
 	</div>
 {:else if bootStatus === 'error'}
-	<div class="boot-screen error">
-		<h2>Failed to initialize</h2>
-		<pre>{bootError}</pre>
+	<div class="boot-screen">
+		<p class="boot-msg" style="color:var(--danger-text)">Failed to initialize</p>
+		<pre class="boot-error">{bootError}</pre>
 	</div>
 
 <!-- ── Wizard ─────────────────────────────────────────────────────────────── -->
 {:else if $wizardStep !== 'done'}
-	<div class="app">
-		<header class="app-header">
-			<span class="logo">DuckLens</span>
-			<button class="btn-ghost" on:click={() => (yamlOpen = !yamlOpen)}>
-				{yamlOpen ? 'Hide YAML' : 'Show YAML'}
-			</button>
-		</header>
+	<!-- Topbar -->
+	<header class="dl-topbar">
+		<div class="dl-logo">
+			<span class="dl-logo-mark"></span>
+			DuckLens
+		</div>
+		<div class="dl-vline" style="height:14px;"></div>
+		<div class="dl-pathbar">
+			<span>wizard</span>
+			<span class="sep">/</span>
+			<span class="here">{$wizardStep}</span>
+		</div>
+		<div class="dl-spacer"></div>
+		<button class="dl-btn ghost sm" on:click={() => (yamlOpen = !yamlOpen)}>
+			{yamlOpen ? 'hide yaml' : 'yaml'}
+		</button>
+		<button class="dl-btn ghost sm theme-toggle" on:click={toggleTheme} aria-label="Toggle theme">
+			{theme === 'dark' ? '☀' : '☾'}
+		</button>
+	</header>
 
-		<div class="wizard-body">
-			<!-- Step progress -->
-			<nav class="step-nav" aria-label="Wizard steps">
-				{#each STEP_ORDER as step}
+	<div class="wizard-body">
+		<!-- Step sidebar -->
+		<nav class="dl-sidebar" aria-label="Wizard steps">
+			<div class="dl-sidebar-section">
+				<div class="dl-sidebar-header">Pipeline</div>
+				{#each STEP_ORDER as step, i}
 					<div
-						class="step-item"
+						class="dl-nav-item"
 						class:active={$wizardStep === step}
 						class:done={stepDone(step)}
 					>
-						<span class="step-dot"></span>
-						<span class="step-label">{STEP_LABELS[step]}</span>
-					</div>
-				{/each}
-			</nav>
-
-			<!-- Active wizard panel -->
-			<div class="wizard-panel">
-				{#if $wizardStep === 'connect'}
-					<div class="wizard-step">
-						<h2>1. Connect Data</h2>
-						<p class="subtitle">Upload your data or try the built-in sample dataset.</p>
-
-						<div class="sample-box">
-							<p>Zero-setup demo with sample orders + customers data:</p>
-							<button class="btn-sample" on:click={loadSampleData} disabled={sampleLoading}>
-								{sampleLoading ? 'Loading…' : '⚡ Load sample data'}
-							</button>
-							{#if sampleError}
-								<div class="error-inline">{sampleError}</div>
-							{/if}
-						</div>
-
-						<div class="divider">— or upload your own CSV —</div>
-
-						<ConnectData on:connect={handleConnect} />
-
-						{#if $sources.length > 0}
-							<div class="connected-list">
-								{#each $sources as s}
-									<div class="connected-item">✓ {s.name}</div>
-								{/each}
-							</div>
-							<div class="wizard-actions">
-								<button class="btn-primary" on:click={() => wizardStep.set('model')}>
-									Next →
-								</button>
-							</div>
+						<span class="num">{String(i + 1).padStart(2, '0')}</span>
+						<span>{STEP_LABELS[step]}</span>
+						{#if stepDone(step)}
+							<span style="margin-left:auto;color:var(--accent);font-size:10px;">✓</span>
 						{/if}
 					</div>
-				{:else if $wizardStep === 'model'}
-					<ModelWizard />
-				{:else if $wizardStep === 'metrics'}
-					<MetricsWizard />
-				{:else if $wizardStep === 'dashboard'}
-					<DashboardWizard />
-				{/if}
+				{/each}
 			</div>
+		</nav>
 
-			<!-- YAML sidebar -->
-			{#if yamlOpen}
-				<div class="yaml-sidebar">
-					<YAMLEditor />
+		<!-- Active wizard panel -->
+		<div class="wizard-panel">
+			{#if $wizardStep === 'connect'}
+				<div class="wizard-step">
+					<div class="eyebrow" style="margin-bottom:var(--sp-3)">Step 01</div>
+					<h2 class="step-heading">Connect Data</h2>
+					<p class="step-sub">Upload your data or try the built-in sample dataset.</p>
+
+					<div class="sample-box dl-panel">
+						<div class="dl-panel-header">
+							<span class="dl-panel-title">Quick start</span>
+							<span class="dl-badge green">
+								<span class="dl-dot green"></span>
+								sample data
+							</span>
+						</div>
+						<div class="dl-panel-body">
+							<p class="sample-desc">Zero-setup demo with sample orders + customers data:</p>
+							<button class="dl-btn primary" on:click={loadSampleData} disabled={sampleLoading}>
+								{#if sampleLoading}
+									<span class="dl-spinner"></span>
+									Loading…
+								{:else}
+									⚡ Load sample data
+								{/if}
+							</button>
+							{#if sampleError}
+								<div class="inline-error">{sampleError}</div>
+							{/if}
+						</div>
+					</div>
+
+					<div class="or-divider">
+						<span class="eyebrow">or upload your own csv</span>
+					</div>
+
+					<ConnectData on:connect={handleConnect} />
+
+					{#if $sources.length > 0}
+						<div class="connected-list">
+							{#each $sources as s}
+								<div class="connected-item">
+									<span class="dl-dot green"></span>
+									<span class="mono">{s.name}</span>
+								</div>
+							{/each}
+						</div>
+						<div class="wizard-actions">
+							<button class="dl-btn primary lg" on:click={() => wizardStep.set('model')}>
+								Next →
+							</button>
+						</div>
+					{/if}
 				</div>
+			{:else if $wizardStep === 'model'}
+				<ModelWizard />
+			{:else if $wizardStep === 'metrics'}
+				<MetricsWizard />
+			{:else if $wizardStep === 'dashboard'}
+				<DashboardWizard />
 			{/if}
 		</div>
+
+		<!-- YAML sidebar -->
+		{#if yamlOpen}
+			<div class="yaml-sidebar">
+				<YAMLEditor />
+			</div>
+		{/if}
 	</div>
 
 <!-- ── Dashboard ──────────────────────────────────────────────────────────── -->
 {:else if dashboard}
-	<div class="app">
-		<header class="app-header dashboard-header">
-			<span class="logo">{dashboard.name}</span>
-			<div class="header-controls">
-				<!-- Time range -->
-				<select
-					value={rangePreset}
-					on:change={(e) => handleRangeChange(e.currentTarget.value)}
-					aria-label="Time range"
-				>
-					{#each PRESETS as p}
-						<option value={p.value}>{p.label}</option>
-					{/each}
-				</select>
+	<!-- Topbar -->
+	<header class="dl-topbar">
+		<div class="dl-logo">
+			<span class="dl-logo-mark"></span>
+			DuckLens
+		</div>
+		<div class="dl-vline" style="height:14px;"></div>
+		<div class="dl-pathbar">
+			<span>dashboard</span>
+			<span class="sep">/</span>
+			<span class="here mono">{dashboard.name}</span>
+		</div>
+		<div class="dl-spacer"></div>
 
-				<!-- Grain -->
-				<select bind:value={$activeGrain} aria-label="Grain">
-					<option value="hour">Hour</option>
-					<option value="day">Day</option>
-					<option value="week">Week</option>
-					<option value="month">Month</option>
-					<option value="quarter">Quarter</option>
-					<option value="year">Year</option>
-				</select>
+		<!-- Time range -->
+		<select
+			class="dl-select"
+			style="width:auto;"
+			value={rangePreset}
+			on:change={(e) => handleRangeChange(e.currentTarget.value)}
+			aria-label="Time range"
+		>
+			{#each PRESETS as p}
+				<option value={p.value}>{p.label}</option>
+			{/each}
+		</select>
 
-				<!-- Comparison toggle -->
-				<label class="comparison-toggle">
-					<input type="checkbox" bind:checked={$comparisonEnabled} />
-					Compare
-				</label>
+		<!-- Grain -->
+		<select class="dl-select" style="width:auto;" bind:value={$activeGrain} aria-label="Grain">
+			<option value="hour">hour</option>
+			<option value="day">day</option>
+			<option value="week">week</option>
+			<option value="month">month</option>
+			<option value="quarter">quarter</option>
+			<option value="year">year</option>
+		</select>
 
-				<!-- Raw data toggle -->
-				<button class="btn-ghost" on:click={() => (rawDataOpen = !rawDataOpen)}>
-					{rawDataOpen ? 'Hide data' : 'Raw data'}
-				</button>
+		<!-- Comparison toggle -->
+		<label class="compare-label">
+			<input type="checkbox" bind:checked={$comparisonEnabled} />
+			<span class="mono" style="font-size:var(--fs-11)">compare</span>
+		</label>
 
-				<!-- YAML toggle -->
-				<button class="btn-ghost" on:click={() => (yamlOpen = !yamlOpen)}>
-					{yamlOpen ? 'Hide YAML' : 'YAML'}
-				</button>
+		<div class="dl-vline" style="height:14px;"></div>
 
-				<!-- Back to wizard -->
-				<button class="btn-ghost" on:click={() => wizardStep.set('connect')}>
-					Edit config
-				</button>
-			</div>
-		</header>
+		<button class="dl-btn ghost sm" on:click={() => (rawDataOpen = !rawDataOpen)}>
+			{rawDataOpen ? 'hide data' : 'raw data'}
+		</button>
+		<button class="dl-btn ghost sm" on:click={() => (yamlOpen = !yamlOpen)}>
+			{yamlOpen ? 'hide yaml' : 'yaml'}
+		</button>
+		<button class="dl-btn sm" on:click={() => wizardStep.set('connect')}>
+			edit config
+		</button>
+		<button class="dl-btn ghost sm theme-toggle" on:click={toggleTheme} aria-label="Toggle theme">
+			{theme === 'dark' ? '☀' : '☾'}
+		</button>
+	</header>
 
-		<!-- YAML editor overlay -->
-		{#if yamlOpen}
-			<div class="yaml-overlay">
-				<YAMLEditor />
+	<!-- YAML editor overlay -->
+	{#if yamlOpen}
+		<div class="yaml-overlay">
+			<YAMLEditor />
+		</div>
+	{/if}
+
+	<main class="dashboard-body">
+		<!-- Filter chips -->
+		{#if $activeFilters.length > 0}
+			<div class="filter-bar">
+				<FilterChips
+					filters={$activeFilters}
+					on:remove={(e) => removeFilter(e.detail)}
+					on:clear={() => activeFilters.set([])}
+				/>
 			</div>
 		{/if}
 
-		<main class="dashboard-body">
-			<!-- Filter chips -->
-			{#if $activeFilters.length > 0}
-				<div class="filter-bar">
-					<FilterChips
-						filters={$activeFilters}
-						on:remove={(e) => removeFilter(e.detail)}
-						on:clear={() => activeFilters.set([])}
+		<!-- Metric cards -->
+		{#if dashboard.layout.metric_cards.length > 0}
+			<div class="metric-cards">
+				{#each dashboard.layout.metric_cards as metricName}
+					{@const measure = dashboard.measures.find((m) => m.name === metricName)}
+					{@const result = metricResults[metricName]}
+					<MetricCard
+						label={measure?.label ?? metricName}
+						value={result?.value ?? null}
+						format={measure?.format ?? 'number'}
+						delta={$comparisonEnabled ? (result?.delta ?? null) : null}
+						deltaPct={$comparisonEnabled ? (result?.deltaPct ?? null) : null}
+						loading={result?.loading ?? true}
+						error={result?.error ?? null}
 					/>
-				</div>
-			{/if}
+				{/each}
+			</div>
+		{/if}
 
-			<!-- Metric cards -->
-			{#if dashboard.layout.metric_cards.length > 0}
-				<div class="metric-cards">
-					{#each dashboard.layout.metric_cards as metricName}
-						{@const measure = dashboard.measures.find((m) => m.name === metricName)}
-						{@const result = metricResults[metricName]}
-						<MetricCard
-							label={measure?.label ?? metricName}
-							value={result?.value ?? null}
-							format={measure?.format ?? 'number'}
-							delta={$comparisonEnabled ? (result?.delta ?? null) : null}
-							deltaPct={$comparisonEnabled ? (result?.deltaPct ?? null) : null}
-							loading={result?.loading ?? true}
-							error={result?.error ?? null}
-						/>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Timeseries chart -->
-			<div class="chart-container">
+		<!-- Timeseries chart -->
+		<div class="dl-panel chart-panel">
+			<div class="dl-panel-header">
+				<span class="dl-panel-title mono">
+					{dashboard.measures.find((m) => m.name === dashboard.layout.timeseries_measure)?.label ?? 'timeseries'}
+				</span>
+				{#if $comparisonEnabled}
+					<span class="dl-badge dim">vs prior period</span>
+				{/if}
+			</div>
+			<div class="chart-body">
 				<TimeseriesChart
 					rows={chartRows}
 					comparisonRows={$comparisonEnabled ? chartCompRows : []}
@@ -597,109 +660,86 @@
 					error={chartError}
 				/>
 			</div>
+		</div>
 
-			<!-- Leaderboards -->
-			{#if dashboard.layout.leaderboard_dimensions.length > 0}
-				<div class="leaderboards">
-					{#each dashboard.layout.leaderboard_dimensions as dimName}
-						{@const dim = dashboard.dimensions.find((d) => d.name === dimName)}
-						{@const measure = dashboard.measures[0]}
-						<Leaderboard
-							title={dimName}
-							dimension={dim?.column ?? dimName}
-							rows={leaderboardResults[dimName]?.rows ?? []}
-							format={measure?.format ?? 'number'}
-							comparisonEnabled={$comparisonEnabled}
-							loading={leaderboardResults[dimName]?.loading ?? true}
-							error={leaderboardResults[dimName]?.error ?? null}
-							on:filter={(e) => addFilter(e.detail.dimension, e.detail.value)}
-						/>
-					{/each}
-				</div>
-			{/if}
+		<!-- Leaderboards -->
+		{#if dashboard.layout.leaderboard_dimensions.length > 0}
+			<div class="leaderboards">
+				{#each dashboard.layout.leaderboard_dimensions as dimName}
+					{@const dim = dashboard.dimensions.find((d) => d.name === dimName)}
+					{@const measure = dashboard.measures[0]}
+					<Leaderboard
+						title={dimName}
+						dimension={dim?.column ?? dimName}
+						rows={leaderboardResults[dimName]?.rows ?? []}
+						format={measure?.format ?? 'number'}
+						comparisonEnabled={$comparisonEnabled}
+						loading={leaderboardResults[dimName]?.loading ?? true}
+						error={leaderboardResults[dimName]?.error ?? null}
+						on:filter={(e) => addFilter(e.detail.dimension, e.detail.value)}
+					/>
+				{/each}
+			</div>
+		{/if}
 
-			<!-- Raw data table -->
-			{#if rawDataOpen}
-				<div class="raw-data-section">
-					<div class="raw-data-header">
-						<h3>Raw data</h3>
-						{#if !rawLoading && !rawError}
-							<span class="raw-data-count">
-								{rawRows.length}{rawRows.length === 500 ? ' rows (limit 500)' : ' rows'}
-							</span>
-						{/if}
-					</div>
-					{#if rawLoading}
-						<div class="raw-status">Loading…</div>
-					{:else if rawError}
-						<div class="raw-status raw-error">{rawError}</div>
-					{:else if rawRows.length === 0}
-						<div class="raw-status">No rows match the current filters and time range.</div>
-					{:else}
-						{@const columns = Object.keys(rawRows[0])}
-						<div class="raw-table-wrap">
-							<table class="raw-table">
-								<thead>
-									<tr>
-										{#each columns as col}
-											<th>{col}</th>
-										{/each}
-									</tr>
-								</thead>
-								<tbody>
-									{#each rawRows as row}
-										<tr>
-											{#each columns as col}
-												<td title={String(row[col] ?? '')}>{row[col] ?? ''}</td>
-											{/each}
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
+		<!-- Raw data table -->
+		{#if rawDataOpen}
+			<div class="dl-panel raw-data-section">
+				<div class="dl-panel-header">
+					<span class="dl-panel-title">raw data</span>
+					{#if !rawLoading && !rawError}
+						<span class="dl-badge dim">
+							{rawRows.length}{rawRows.length === 500 ? ' rows (limit 500)' : ' rows'}
+						</span>
 					{/if}
 				</div>
-			{/if}
-		</main>
-	</div>
+				{#if rawLoading}
+					<div class="state-msg">
+						<span class="dl-spinner"></span>
+						Loading…
+					</div>
+				{:else if rawError}
+					<div class="state-msg" style="color:var(--danger-text)">{rawError}</div>
+				{:else if rawRows.length === 0}
+					<div class="state-msg">No rows match the current filters and time range.</div>
+				{:else}
+					{@const columns = Object.keys(rawRows[0])}
+					<div class="raw-table-wrap">
+						<table class="dl-table">
+							<thead>
+								<tr>
+									{#each columns as col}
+										<th>{col}</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody>
+								{#each rawRows as row}
+									<tr>
+										{#each columns as col}
+											<td class="mono" title={String(row[col] ?? '')}>{row[col] ?? ''}</td>
+										{/each}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</main>
 {/if}
 
+</div><!-- end .app -->
+
 <style>
-	/* ── Global reset ──────────────────────────────────────────────────────── */
-	:global(*, *::before, *::after) {
-		box-sizing: border-box;
-	}
-
-	:global(body) {
-		margin: 0;
-		font-family: system-ui, -apple-system, sans-serif;
-		background: #f5f7fc;
-		color: #1a1a2e;
-	}
-
 	/* ── App shell ─────────────────────────────────────────────────────────── */
 	.app {
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
-	}
-
-	.app-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem 1.5rem;
-		background: white;
-		border-bottom: 1px solid #e8eaf0;
-		flex-shrink: 0;
-		gap: 1rem;
-	}
-
-	.logo {
-		font-size: 1.1rem;
-		font-weight: 700;
-		color: #1a1a2e;
-		letter-spacing: -0.02em;
+		background: var(--bg);
+		color: var(--fg);
 	}
 
 	/* ── Boot screen ───────────────────────────────────────────────────────── */
@@ -709,99 +749,59 @@
 		align-items: center;
 		justify-content: center;
 		min-height: 100vh;
-		gap: 1rem;
-		color: #666;
+		gap: var(--sp-6);
+		background: var(--bg);
 	}
 
-	.boot-screen.error {
-		color: #dc2626;
+	.boot-msg {
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
+		color: var(--fg-muted);
+		margin: 0;
 	}
 
-	.boot-screen pre {
-		font-size: 0.8rem;
-		background: #fff0f0;
-		padding: 1rem;
-		border-radius: 6px;
+	.boot-error {
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
+		background: var(--danger-bg);
+		color: var(--danger-text);
+		border: 1px solid var(--danger);
+		padding: var(--sp-6) var(--sp-7);
+		border-radius: var(--r-3);
 		max-width: 600px;
 		overflow: auto;
+		margin: 0;
 	}
 
-	.spinner-lg {
-		width: 40px;
-		height: 40px;
-		border: 4px solid #c0caff;
-		border-top-color: #4f8ef7;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+	/* ── Theme toggle button ────────────────────────────────────────────────── */
+	.theme-toggle {
+		width: 26px;
+		padding: 0;
+		font-size: 12px;
 	}
 
 	/* ── Wizard ────────────────────────────────────────────────────────────── */
 	.wizard-body {
 		display: flex;
 		flex: 1;
-		gap: 0;
 		overflow: hidden;
-	}
-
-	.step-nav {
-		display: flex;
-		flex-direction: column;
-		gap: 0;
-		padding: 1.5rem 1rem;
-		background: white;
-		border-right: 1px solid #e8eaf0;
-		width: 140px;
-		flex-shrink: 0;
-	}
-
-	.step-item {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		padding: 0.6rem 0.5rem;
-		color: #bbb;
-		font-size: 0.85rem;
-		border-radius: 6px;
-		transition: color 0.15s;
-	}
-
-	.step-item.active {
-		color: #4f8ef7;
-		font-weight: 600;
-	}
-
-	.step-item.done {
-		color: #16a34a;
-	}
-
-	.step-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: currentColor;
-		flex-shrink: 0;
 	}
 
 	.wizard-panel {
 		flex: 1;
-		padding: 2rem;
+		padding: var(--sp-10) var(--sp-9);
 		overflow-y: auto;
+		background: var(--bg);
 	}
 
 	.yaml-sidebar {
 		width: 340px;
 		flex-shrink: 0;
-		border-left: 1px solid #e8eaf0;
+		border-left: 1px solid var(--border);
 		display: flex;
 		flex-direction: column;
-		padding: 0.75rem;
-		background: white;
+		padding: var(--sp-6);
+		background: var(--surface);
 	}
 
 	/* ── Connect step ──────────────────────────────────────────────────────── */
@@ -809,307 +809,197 @@
 		max-width: 560px;
 	}
 
-	.wizard-step h2 {
-		margin: 0 0 0.25rem;
-		font-size: 1.2rem;
+	.step-heading {
+		font-size: var(--fs-22);
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--fg);
+		margin: 0 0 var(--sp-2);
 	}
 
-	.subtitle {
-		margin: 0 0 1.5rem;
-		color: #777;
-		font-size: 0.9rem;
+	.step-sub {
+		font-size: var(--fs-13);
+		color: var(--fg-muted);
+		margin: 0 0 var(--sp-8);
 	}
 
 	.sample-box {
-		background: #f0f4ff;
-		border: 1px solid #d0dcf7;
-		border-radius: 8px;
-		padding: 1rem 1.25rem;
-		margin-bottom: 1.25rem;
+		margin-bottom: var(--sp-7);
 	}
 
-	.sample-box p {
-		margin: 0 0 0.75rem;
-		color: #444;
-		font-size: 0.875rem;
+	.sample-desc {
+		font-size: var(--fs-12);
+		color: var(--fg-muted);
+		margin: 0 0 var(--sp-5);
 	}
 
-	.btn-sample {
-		padding: 0.55rem 1.1rem;
-		background: #4f8ef7;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 600;
-	}
-	.btn-sample:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.btn-sample:hover:not(:disabled) {
-		background: #3a7ae8;
+	.inline-error {
+		margin-top: var(--sp-4);
+		font-size: var(--fs-11);
+		color: var(--danger-text);
+		font-family: var(--font-mono);
 	}
 
-	.error-inline {
-		margin-top: 0.5rem;
-		font-size: 0.8rem;
-		color: #dc2626;
+	.or-divider {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-5);
+		margin: var(--sp-7) 0;
 	}
-
-	.divider {
-		text-align: center;
-		color: #bbb;
-		font-size: 0.8rem;
-		margin: 1rem 0;
-		position: relative;
+	.or-divider::before,
+	.or-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--border);
 	}
 
 	.connected-list {
-		margin-top: 1rem;
+		margin-top: var(--sp-6);
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
+		gap: var(--sp-3);
 	}
 
 	.connected-item {
-		font-size: 0.875rem;
-		color: #16a34a;
-		font-weight: 500;
+		display: flex;
+		align-items: center;
+		gap: var(--sp-4);
+		font-size: var(--fs-12);
+		color: var(--fg);
 	}
 
 	.wizard-actions {
 		display: flex;
 		justify-content: flex-end;
-		margin-top: 1.25rem;
+		margin-top: var(--sp-8);
 	}
 
-	/* ── Shared button styles ─────────────────────────────────────────────── */
+	/* ── Shared global button styles (used by child wizards) ─────────────── */
 	:global(.btn-primary) {
-		padding: 0.5rem 1.1rem;
-		background: #4f8ef7;
-		color: white;
-		border: 1px solid #3a7ae8;
-		border-radius: 6px;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--sp-3);
+		height: 26px;
+		padding: 0 var(--sp-5);
+		background: var(--accent);
+		color: var(--accent-fg);
+		border: 1px solid var(--accent);
+		border-radius: var(--r-2);
 		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 600;
+		font-family: var(--font-sans);
+		font-size: var(--fs-12);
+		font-weight: 500;
 	}
-	:global(.btn-primary:disabled) {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	:global(.btn-primary:hover:not(:disabled)) {
-		background: #3a7ae8;
-	}
+	:global(.btn-primary:disabled) { opacity: 0.5; cursor: not-allowed; }
+	:global(.btn-primary:hover:not(:disabled)) { background: var(--accent-hover); border-color: var(--accent-hover); }
 
 	:global(.btn-secondary) {
-		padding: 0.5rem 1.1rem;
-		background: white;
-		color: #555;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
+		display: inline-flex;
+		align-items: center;
+		height: 26px;
+		padding: 0 var(--sp-5);
+		background: var(--surface);
+		color: var(--fg);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--r-2);
 		cursor: pointer;
-		font-size: 0.875rem;
+		font-family: var(--font-sans);
+		font-size: var(--fs-12);
 	}
-	:global(.btn-secondary:hover) {
-		background: #f5f5f5;
-	}
-
-	.btn-ghost {
-		padding: 0.4rem 0.8rem;
-		background: none;
-		color: #666;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.8rem;
-		white-space: nowrap;
-	}
-	.btn-ghost:hover {
-		background: #f5f5f5;
-	}
+	:global(.btn-secondary:hover) { background: var(--surface-hover); }
 
 	/* ── Dashboard ─────────────────────────────────────────────────────────── */
-	.dashboard-header {
-		flex-wrap: wrap;
-	}
-
-	.header-controls {
+	.compare-label {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		flex-wrap: wrap;
-	}
-
-	.header-controls select {
-		padding: 0.35rem 0.6rem;
-		border: 1px solid #d8dce8;
-		border-radius: 6px;
-		font-size: 0.8rem;
-		background: white;
-		cursor: pointer;
-	}
-
-	.comparison-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		font-size: 0.8rem;
-		color: #555;
+		gap: var(--sp-3);
 		cursor: pointer;
 	}
 
 	.yaml-overlay {
 		position: fixed;
-		top: 56px;
+		top: 40px;
 		right: 0;
 		width: 360px;
-		height: calc(100vh - 56px);
-		border-left: 1px solid #e8eaf0;
-		background: white;
+		height: calc(100vh - 40px);
+		border-left: 1px solid var(--border);
+		background: var(--surface);
 		z-index: 100;
-		box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
+		box-shadow: -4px 0 24px oklch(0% 0 0 / 0.12);
+		display: flex;
+		flex-direction: column;
 	}
 
 	.dashboard-body {
 		flex: 1;
-		padding: 1.25rem 1.5rem;
+		padding: var(--sp-7) var(--sp-8);
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--sp-6);
+		background: var(--bg);
 	}
 
 	.filter-bar {
-		background: white;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
-		padding: 0.6rem 1rem;
+		padding: var(--sp-4) var(--sp-6);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--r-3);
 	}
 
 	.metric-cards {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 1rem;
+		gap: var(--sp-5);
 	}
 
-	.chart-container {
-		background: white;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
-		height: 320px;
+	.chart-panel { overflow: hidden; }
+
+	.chart-body {
+		height: 280px;
 		overflow: hidden;
 	}
 
 	.leaderboards {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-		gap: 1rem;
+		gap: var(--sp-5);
 	}
 
 	/* ── Raw data ──────────────────────────────────────────────────────────── */
-	.raw-data-section {
-		background: white;
-		border: 1px solid #e8eaf0;
-		border-radius: 8px;
-		overflow: hidden;
-	}
-
-	.raw-data-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.65rem 1rem;
-		border-bottom: 1px solid #e8eaf0;
-		background: #f8faff;
-	}
-
-	.raw-data-header h3 {
-		margin: 0;
-		font-size: 0.8rem;
-		font-weight: 700;
-		color: #555;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-
-	.raw-data-count {
-		font-size: 0.75rem;
-		color: #999;
-	}
-
-	.raw-status {
-		padding: 1.5rem;
-		text-align: center;
-		font-size: 0.85rem;
-		color: #888;
-	}
-
-	.raw-status.raw-error {
-		color: #dc2626;
-	}
-
 	.raw-table-wrap {
 		overflow-x: auto;
 		max-height: 420px;
 		overflow-y: auto;
 	}
 
-	.raw-table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 0.8rem;
-	}
-
-	.raw-table th {
-		position: sticky;
-		top: 0;
-		background: #f5f7fc;
-		padding: 0.45rem 0.75rem;
-		text-align: left;
-		font-weight: 600;
-		color: #555;
-		border-bottom: 1px solid #e8eaf0;
-		white-space: nowrap;
-		z-index: 1;
-	}
-
-	.raw-table td {
-		padding: 0.35rem 0.75rem;
-		border-bottom: 1px solid #f0f2f8;
-		color: #333;
-		white-space: nowrap;
-		max-width: 220px;
+	.raw-table-wrap .dl-table td {
+		max-width: 200px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.raw-table tbody tr:hover {
-		background: #f8faff;
+	.state-msg {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--sp-4);
+		padding: var(--sp-9);
+		font-size: var(--fs-12);
+		color: var(--fg-muted);
+		font-family: var(--font-mono);
 	}
+
+	/* ── Mono utility ───────────────────────────────────────────────────────── */
+	.mono { font-family: var(--font-mono); }
 
 	/* ── Responsive ────────────────────────────────────────────────────────── */
 	@media (max-width: 640px) {
-		.step-nav {
-			display: none;
-		}
-
-		.wizard-panel {
-			padding: 1.25rem;
-		}
-
-		.yaml-sidebar {
-			display: none;
-		}
-
-		.dashboard-body {
-			padding: 0.75rem;
-		}
-
-		.yaml-overlay {
-			width: 100vw;
-		}
+		.dl-sidebar { display: none; }
+		.wizard-panel { padding: var(--sp-7); }
+		.yaml-sidebar { display: none; }
+		.dashboard-body { padding: var(--sp-5); }
+		.yaml-overlay { width: 100vw; }
 	}
 </style>

@@ -22,8 +22,9 @@
 				type: 'line',
 				data: primary.map((r) => [r.bucket, r.value]),
 				smooth: true,
-				itemStyle: { color: '#4f8ef7' },
-				areaStyle: { opacity: 0.08, color: '#4f8ef7' }
+				itemStyle: { color: 'oklch(55% 0.14 150)' },
+				lineStyle: { color: 'oklch(55% 0.14 150)', width: 1.5 },
+				areaStyle: { opacity: 0.08, color: 'oklch(55% 0.14 150)' }
 			} as EChartsOption['series'] & object
 		];
 
@@ -33,8 +34,8 @@
 				type: 'line',
 				data: comparison.map((r) => [r.bucket, r.value]),
 				smooth: true,
-				lineStyle: { type: 'dashed', color: '#aaa' },
-				itemStyle: { color: '#aaa' }
+				lineStyle: { type: 'dashed', color: 'oklch(58% 0.13 245)', width: 1.25 },
+				itemStyle: { color: 'oklch(58% 0.13 245)' }
 			});
 		}
 
@@ -70,10 +71,11 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: #bbb;
-		font-size: 0.9rem;
+		color: var(--fg-muted);
+		font-family: var(--font-mono);
+		font-size: var(--fs-12);
 	}
 	.state-msg.error {
-		color: #dc2626;
+		color: var(--danger-text);
 	}
 </style>

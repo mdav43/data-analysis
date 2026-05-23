@@ -10,10 +10,8 @@
 {#if filters.length > 0}
 	<div class="filter-chips">
 		{#each filters as filter (`${filter.dimension}:${filter.value}`)}
-			<span class="chip">
-				<span class="chip-label"
-					>{filter.dimension}: <strong>{filter.value}</strong></span
-				>
+			<span class="dl-badge green chip">
+				<span class="chip-label">{filter.dimension}: <strong>{filter.value}</strong></span>
 				<button
 					class="chip-remove"
 					on:click={() => dispatch('remove', filter)}
@@ -21,7 +19,7 @@
 				>×</button>
 			</span>
 		{/each}
-		<button class="clear-all" on:click={() => dispatch('clear')}>Clear all</button>
+		<button class="clear-all" on:click={() => dispatch('clear')}>clear all</button>
 	</div>
 {/if}
 
@@ -29,47 +27,44 @@
 	.filter-chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: var(--sp-3);
 		align-items: center;
 	}
 
 	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.25rem 0.5rem;
-		background: #e8f0fe;
-		border: 1px solid #c0d2f7;
-		border-radius: 100px;
-		font-size: 0.8rem;
-		color: #2d4a9a;
+		height: auto;
+		padding: 2px var(--sp-4);
+		gap: var(--sp-3);
+	}
+
+	.chip-label {
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
 	}
 
 	.chip-remove {
 		background: none;
 		border: none;
 		cursor: pointer;
-		color: #2d4a9a;
-		font-size: 1rem;
+		color: var(--accent-text);
+		font-size: 14px;
 		padding: 0;
 		line-height: 1;
 		opacity: 0.7;
-		transition: opacity 0.15s;
+		transition: opacity 0.1s;
 	}
-	.chip-remove:hover {
-		opacity: 1;
-	}
+	.chip-remove:hover { opacity: 1; }
 
 	.clear-all {
 		background: none;
 		border: none;
 		cursor: pointer;
-		color: #888;
-		font-size: 0.8rem;
-		text-decoration: underline;
+		color: var(--fg-muted);
+		font-family: var(--font-mono);
+		font-size: var(--fs-11);
 		padding: 0;
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
-	.clear-all:hover {
-		color: #333;
-	}
+	.clear-all:hover { color: var(--fg); }
 </style>
